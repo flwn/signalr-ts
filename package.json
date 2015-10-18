@@ -1,0 +1,17 @@
+{
+  "name": "signalr-ts",
+  "version": "1.0.0",
+  "description": "A signalr client library written in TypeScript.",
+  "main": "dist/index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "signalr"
+  ],
+  "author": "Erik Aalbers",
+  "license": "MIT"
+}
