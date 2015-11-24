@@ -18,7 +18,7 @@ interface PendingInvocation {
 }
 
 
-type disposer = () => void;
+export type disposer = { dispose: () => void };
 
 export class HubConnection extends Connection {
     private messageId: number = 0;

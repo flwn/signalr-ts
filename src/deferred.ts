@@ -1,5 +1,5 @@
 ﻿
-enum DeferredState {
+export enum DeferredState {
     pending,
     resolved,
     rejected

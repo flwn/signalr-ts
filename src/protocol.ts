@@ -1,34 +1,30 @@
 ﻿///<reference path="./_wire.d.ts" />
-import {HttpClient, HttpResponseMessage} from 'aurelia-http-client';
 
 import {Connection} from './connection';
 import {Transport} from './transport';
 import {WebSocketTransport} from './transport-websocket';
 
+import 'fetch';
 
 export class ProtocolHelper {
-    constructor(private http: HttpClient) { }
 
     public negotiate(connection: Connection): Promise<NegotiationResult> {
 
-        return new Promise((resolve, reject) => {
+        var negotiateUrl = connection.url.negotiate();
 
-            var negotiateUrl = connection.url.negotiate();
+        return fetch(negotiateUrl)
+            .then(response => response.json<NegotiationResult>());
 
-            this.http
-                .get(negotiateUrl)
-                .then(response => resolve(<NegotiationResult> response.content), reject);
-        });
     }
 
     public connect(connection: Connection, negotiationResult: NegotiationResult): Promise<Transport> {
         if (negotiationResult.TryWebSockets !== true) {
-            throw new Error('Server does not supports web sockets. No available.');
+            throw new Error('Server does not supports web sockets. No supported transport available.');
         }
         
         //todo: add other transports...
         let transportName = WebSocketTransport.name;
-        
+
         let connectUrl = connection.url.connect(negotiationResult.ConnectionToken, transportName);
         let transportInitialized = false;
         let messageSink = connection.messageSink;
@@ -51,11 +47,9 @@ export class ProtocolHelper {
     public start(connection: Connection): Promise<any> {
         let startUrl = connection.url.start(connection.connectionToken, connection.transport.name);
 
-        return this.http
-            .get(startUrl)
-            .then((x: HttpResponseMessage): void => {
-                var response = <StartResponse> x.content;
-
+        return fetch(startUrl)
+            .then(response => response.json<StartResponse>())
+            .then((response: StartResponse): void => {
                 if (typeof (response) !== "object" || response === null || response.Response !== "started") {
                     throw new Error('Start not succeeded');
                 }
@@ -67,7 +61,7 @@ export class ProtocolHelper {
         let abortUrl = connection.url.abort(connection.connectionToken, connection.transport.name);
 
         connection.transport.close();
-
-        return this.http.post(abortUrl, '');
+        
+        return fetch(abortUrl,  {method: 'POST', body: '' });
     }
 }

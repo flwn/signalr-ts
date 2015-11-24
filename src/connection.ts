@@ -4,7 +4,7 @@ import {ProtocolHelper} from './protocol';
 import {UrlBuilder} from './url';
 import {protocol, EventAggregator} from './config';
 
-type disposer = () => void;
+export type disposer = { dispose: () => void };
 
 
 export interface Timeouts {
@@ -182,7 +182,7 @@ export class Connection {
       * Subscribe to incoming messages.
       * @returns a dispose function. Calling this function will dispose the subscription.
       */
-    onMessage<T>(handler: (message: T) => void): () => void {
+    onMessage<T>(handler: (message: T) => void): disposer {
         return this.eventAggregator.subscribe('message', handler);
     }
 
