@@ -1,6 +1,6 @@
 {
 	"compilerOptions": {
-		"target": "ES5",
+		"target": "ES6",
 		"module": "system",
 		"declaration": true,
 		"diagnostics": true,
@@ -8,6 +8,5 @@
 		"outDir": "dist",
 		"noLib": false
 	},
-	"exclude" : ["node_modules"],
-	"files": ["src/index.ts", "typings/tsd.d.ts"]
+	"exclude" : ["node_modules"]
 }

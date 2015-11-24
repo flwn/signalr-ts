@@ -1,0 +1,37 @@
+{
+  "version": "1.0.0-*",
+  "webroot": "wwwroot",
+  "compilationOptions": {
+    "emitEntryPoint": true
+  },
+  "tooling": {
+    "defaultNamespace": "SignalrHost"
+  },
+  "dependencies": {
+    "Microsoft.AspNet.StaticFiles": "1.0.0-*",
+    "Microsoft.AspNet.IISPlatformHandler": "1.0.0-rc1-final",
+    "Microsoft.AspNet.Hosting": "1.0.0-rc1-final",
+    "Microsoft.AspNet.Server.Kestrel": "1.0.0-rc1-final",
+    "Microsoft.AspNet.SignalR.Server": "3.0.0-*",
+    "Microsoft.AspNet.Http.Abstractions": "1.0.0-*",
+    "Microsoft.AspNet.WebSockets.Server": "1.0.0-rc1-final"
+  },
+  "commands": {
+    "web": "Microsoft.AspNet.Server.Kestrel"
+  },
+  "frameworks": {
+    "dnx451": {
+      "Microsoft.AspNet.Http.Abstractions": "1.0.0-*"},
+    "dnxcore50": {
+      "Microsoft.AspNet.Http.Abstractions": "1.0.0-*"
+    }
+  },
+  "exclude": [
+    "wwwroot",
+    "node_modules"
+  ],
+  "publishExclude": [
+    "**.user",
+    "**.vspscc"
+  ]
+}

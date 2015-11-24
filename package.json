@@ -13,5 +13,13 @@
     "signalr"
   ],
   "author": "Erik Aalbers",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "gulp": "^3.9.0",
+    "gulp-concat": "^2.6.0",
+    "gulp-sourcemaps": "^1.6.0",
+    "gulp-typescript": "^2.9.2",
+    "jspm": "^0.16.15",
+    "merge2": "^0.3.6"
+  }
 }

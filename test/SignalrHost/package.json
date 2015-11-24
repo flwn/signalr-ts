@@ -1,0 +1,13 @@
+{
+  "jspm": {
+    "directories": {
+      "baseURL": "wwwroot"
+    },
+    "dependencies": {
+      "fetch": "github:github/fetch@^0.10.1"
+    },
+    "devDependencies": {
+      "typescript": "npm:typescript@^1.6.2"
+    }
+  }
+}
