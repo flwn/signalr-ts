@@ -18,6 +18,10 @@ interface PendingInvocation {
 }
 
 
+function isHubInvocationResult(data: HubInvocationResult|HubConnectionData) : data is HubInvocationResult {
+    return typeof data['I'] !== "undefined";
+}
+
 export type disposer = { dispose: () => void };
 
 export class HubConnection extends Connection {
@@ -48,27 +52,30 @@ export class HubConnection extends Connection {
     handleData(data: HubInvocationResult|HubConnectionData) {
         console.log('handle hub data', data);
         
-        if (typeof data['I'] !== "undefined") {
-            this.handleInvocationResult(<HubInvocationResult>data);
+        if (isHubInvocationResult(data)) {
+            this.handleInvocationResult(data);
             return;
-        } else if (typeof data['M'] !== "undefined") {
-            let messages = (<HubConnectionData>data).M;
-            messages.forEach((msg: ClientMethodInvocation) => {
-                let hubName:string = msg.H.toLowerCase();
-                let method: string = msg.M;
-                if(hubName in this._hubs) {
-                    let proxy = this._hubs[hubName];
-                    proxy.trigger(method, msg.A, msg.S);
-                } else {
-                    console.warn(`No proxy for hub '${hubName}' to invoke method '${method}' on.`);
-                }
-            });
-            //prevent double handling of messages by the connection;
-            delete data['M'];
+        } else {
+            
+            if (typeof data['M'] !== "undefined") {
+                let messages = (data).M;
+                messages.forEach((msg: ClientMethodInvocation) => {
+                    let hubName:string = msg.H.toLowerCase();
+                    let method: string = msg.M;
+                    if(hubName in this._hubs) {
+                        let proxy = this._hubs[hubName];
+                        proxy.trigger(method, msg.A, msg.S);
+                    } else {
+                        console.warn(`No proxy for hub '${hubName}' to invoke method '${method}' on.`);
+                    }
+                });
+                //prevent double handling of messages by the connection;
+                delete data['M'];
+            }
+    
+            //let the base connection handle the generic stuff like groups, etc.
+            super.handleData(data);
         }
-
-        //let the base connection handle the generic stuff like groups, etc.
-        super.handleData(data);
     }
 
     start() {
@@ -116,6 +123,7 @@ export class HubConnection extends Connection {
     
             super.send(invocation)
                 .catch((e) => {
+                    console.warn(`Error sending hub method invocation with id ${id}.`, e);
                     delete this._pendingInvocations[id];
                     reject(e);
                 });

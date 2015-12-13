@@ -3,24 +3,39 @@ export class UrlBuilder {
 
     constructor(public baseUrl: string, public connectionData: string = null) { }
 
+    appRelativeUrl: string = '';
+    transport: string;
+    connectionToken: string;
+    connectionId: string;
+
     negotiate(): string {
         return this.build('/negotiate');
     }
 
-    start(connectionToken: string, transport: string): string {
-        return this.build('/start', transport, connectionToken);
+    start(): string {
+        return this.build('/start');
     }
-    abort(connectionToken: string, transport: string): string {
-        return this.build('/abort', transport, connectionToken);
+    abort(): string {
+        return this.build('/abort');
+    }
+    
+    send(): string {
+        return this.build('/send');
     }
 
-    connect(connectionToken: string, transport: string): string {
-        var urlPath = this.build('/connect', transport, connectionToken);
+    poll(messageId: string): string {
+        var url = `${this.build('/poll') }&messageId=${encodeURIComponent(messageId) }`;
+
+        return url;
+    }
+
+    connect(): string {
+        var urlPath = this.build('/connect');
         urlPath += '&tid=' + Math.floor(Math.random() * 11);
 
         var protocol = location.protocol;
 
-        if (transport === "webSockets") {
+        if (this.transport === "webSockets") {
             //http: -> ws:
             //https: -> wss:
             protocol = protocol.replace('http', 'ws');
@@ -32,16 +47,17 @@ export class UrlBuilder {
     }
 
 
-    build(path: string, transport?: string, connectionToken?: string): string {
+    build(path: string): string {
+        //todo: use this.appRelativeUrl
         var url = this.baseUrl + path + '?clientProtocol=1.5';
 
         url += '&connectionData=' + this.connectionData;
 
-        if (connectionToken) {
-            url += '&connectionToken=' + encodeURIComponent(connectionToken);
+        if (this.connectionToken) {
+            url += '&connectionToken=' + encodeURIComponent(this.connectionToken);
         }
-        if (transport) {
-            url += '&transport=webSockets';
+        if (this.transport) {
+            url += '&transport=' + this.transport;
         }
 
         return url;
@@ -56,4 +72,6 @@ export class UrlBuilder {
 
         this.connectionData = queryString;
     }
+
+
 }

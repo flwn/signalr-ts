@@ -43,7 +43,7 @@ export class EventAggregator {
 
 		let eventLookup = this.eventLookup[eventName] || (this.eventLookup[eventName] = []);
 
-		eventLookup[eventName].push(callback);
+		eventLookup.push(callback);
 
 		return {
 			dispose: () => {

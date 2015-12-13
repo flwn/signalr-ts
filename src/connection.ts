@@ -168,7 +168,7 @@ export class Connection {
         return this._messageSink;
     }
 
-    private setNegotiated(result: NegotiationResult): void {
+    private setNegotiated(result: NegotiationResult): void {        
         this._connectionToken = result.ConnectionToken;
         this._connectionId = result.ConnectionId;
 
@@ -195,7 +195,7 @@ export class Connection {
     }
 
 
-    send(data: any): Promise<any> {
+    send(data: any): Promise<void> {
         return this._transport.send(data);
     }
 
@@ -213,7 +213,6 @@ export class Connection {
 
 
         if (Array.isArray(data.M)) {
-            let lastMessageId = data.C;
 
             data.M.forEach(message =>
                 this.eventAggregator.publish('message', message));

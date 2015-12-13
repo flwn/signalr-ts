@@ -21,12 +21,13 @@ namespace SignalrHost
             Clients.CallerState.blah = "yabber";
             Clients.Caller.helloClient("world", "!!!");
 
+            Clients.Others.somebodyConnected($"ConnectionId: {this.Context.ConnectionId} ");
             return base.OnConnected();
         }
         
         public override Task OnDisconnected(bool stopCalled) {
             
-            Clients.Others.somebodyDisconnected($"stopCalled: {stopCalled.ToString()} ");
+            Clients.Others.somebodyDisconnected($"stopCalled: {stopCalled.ToString()}, ConnectionId: {this.Context.ConnectionId} ");
             
             return base.OnDisconnected(stopCalled);
         }

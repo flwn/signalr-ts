@@ -37,6 +37,7 @@ namespace SignalrHost
                 .UseIISPlatformHandler()
             .Run(async (context) =>
             {
+                context.Response.StatusCode = 404;
                 await context.Response.WriteAsync("Hello World!");
             });
         }
