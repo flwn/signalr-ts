@@ -12,6 +12,8 @@ export class ProtocolHelper {
         let url = connection.url;
         var negotiateUrl = url.negotiate();
 
+
+
         return fetch(negotiateUrl)
             .then(response => response.json<NegotiationResult>())
             .then((negotiationResult: NegotiationResult) => {
@@ -30,14 +32,12 @@ export class ProtocolHelper {
         let transportInitialized = false;
         let messageSink = connection.messageSink;
         let timeout = negotiationResult.TransportConnectTimeout * 1000;
-        
-        let x: typeof Transport = LongPollingTransport;
-        
-        new x
-        
+                
         let transport: Transport = new LongPollingTransport(url, messageSink);
         //let transport: Transport = new WebSocketTransport(url, messageSink);
         url.transport = transport.name;
+
+
 
         return new Promise((resolve: (value: Transport) => void, reject: (reason: any) => void) => {
             transport.connect()

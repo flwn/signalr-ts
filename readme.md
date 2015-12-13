@@ -1,11 +1,14 @@
 #signalr-ts
-Signalr-ts is a signalr client library written in TypeScript with 'no' third-party library dependencies.
+Signalr-ts is a signalr client library written in TypeScript with 'no' third-party library dependencies (except for polyfills). 
 
 ##Todo:
 
 * Documentation
 * Unit tests
-* Buid scripts
+* Build scripts
+* Implementation:
+ * Implement reconnect
+ * More resilient error handling.
 
 ##Build
 The build process of Signalr-ts not completely fleshed out. The goal is to provide several builds for systemjs, amd and stand alone. Right now only the SystemJS version is supported.
