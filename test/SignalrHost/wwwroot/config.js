@@ -16,11 +16,14 @@ System.config({
     },
     "npm:*": {
       "defaultExtension": "js"
+    },
+    "github:*": {
+      "defaultExtension": "js"
     }
   },
 
   map: {
     "fetch": "github:github/fetch@0.10.1",
-    "typescript": "npm:typescript@1.6.2"
+    "typescript": "npm:typescript@1.7.3"
   }
 });

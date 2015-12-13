@@ -1,10 +1,18 @@
-
-interface PersistentConnectionData {
+interface RawMessageData {
 
     /**
       * Message Id
       */
     C?: string;
+    
+    /**
+      * Transport Initialized
+      */
+    S?: number;
+}
+
+
+interface PersistentConnectionData extends RawMessageData {
 
     /**
       * Messages
@@ -15,22 +23,18 @@ interface PersistentConnectionData {
       * Groups token
       */
     G?: string;
-
+    
+    /**
+     * Long Poll Delay
+     */
+    L?: number;
+    
     /**
       * Should reconnect?
       */
     T?: number;
 }
 
-
-
-interface RawMessageData {
-
-    /**
-      * Transport Initialized
-      */
-    S?: number;
-}
 
 interface NegotiationResult {
     "Url": string;
