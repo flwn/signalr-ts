@@ -2,7 +2,7 @@
 import {Transport, MessageSink} from './transport';
 import {ProtocolHelper} from './protocol';
 import {UrlBuilder} from './url';
-import {protocol, EventAggregator} from './config';
+import {protocol, EventAggregator, ConnectionConfig} from './config';
 
 export type disposer = { dispose: () => void };
 
@@ -219,12 +219,12 @@ export class Connection {
         }
     }
     
-    public start(): Promise<Connection> {
+    public start(options?: ConnectionConfig): Promise<Connection> {
 
         return protocol.negotiate(this)
             .then((result: NegotiationResult) => {
                 this.setNegotiated(result);
-                return protocol.connect(this, result);
+                return protocol.connect(this, result, options);
             })
             .then((transport) => {
                 if (transport.supportsKeepAlive) {
@@ -239,6 +239,7 @@ export class Connection {
             .then(() => {
                 this.state = ConnectionState.connected;
 
+                //todo: support node with beforeExit?
                 window.addEventListener('unload', () => {
                     this.stop();
                 });

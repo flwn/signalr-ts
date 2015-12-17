@@ -1,5 +1,5 @@
 ///<reference path="./_wire.d.ts" />
-import {Connection} from './connection';
+import {Connection, ConnectionState} from './connection';
 import {EventAggregator} from './config';
 
 
@@ -22,6 +22,10 @@ function isHubInvocationResult(data: HubInvocationResult|HubConnectionData) : da
     return typeof data['I'] !== "undefined";
 }
 
+function isErrorResult(result: HubInvocationErrorResult|HubInvocationResult): result is HubInvocationErrorResult {
+    return typeof result['E'] !== "undefined";
+}
+
 export type disposer = { dispose: () => void };
 
 export class HubConnection extends Connection {
@@ -36,6 +40,9 @@ export class HubConnection extends Connection {
     hub(name: string): HubProxy {
         let lcaseName = name.toLowerCase();
         if (false === this._hubs.hasOwnProperty(lcaseName)) {
+            if(this.state === ConnectionState.connected) {
+                throw new Error('Cannot register hub after de connecting has been started.')
+            }
             this._hubs[lcaseName] = new HubProxy(name, this);
         }
         return this._hubs[lcaseName];
@@ -78,8 +85,14 @@ export class HubConnection extends Connection {
         }
     }
 
-    start() {
-        this.url.setHubs(...this.hubNames);
+    /**
+     * Starts the hub connection and registers hubs with at least one client event subscription.
+     */
+    start() : Promise<HubConnection> {
+        let activeHubs = this.hubNames
+            .filter(hubName => this._hubs[hubName].hasEventHandlers);
+            
+        this.url.setHubs(...activeHubs);
 
         return super.start();
     }
@@ -145,15 +158,14 @@ export class HubConnection extends Connection {
             pendingInvocation.hub.extendState(result.S);
         }
         
-        if (typeof (<HubInvocationErrorResult>result).E !== "undefined") {
-            let errorResult = <HubInvocationErrorResult>result;
-            if (errorResult.T) {
+        if (isErrorResult(result)) {
+            if (result.T) {
                 //stacktrace
-                console.error(errorResult.E + "\n" + errorResult.T + ".");
+                console.error(`HubInvocationErrorResult '${result.E}'. Stack trace:\n${result.T}`);
             }
-            let error = new Error(errorResult.E);
-            error['source'] = errorResult.H ? "HubException" : "Exception";
-            error['data'] = errorResult.D;
+            let error = new Error(result.E);
+            error['source'] = result.H ? "HubException" : "Exception";
+            error['data'] = result.D;
             pendingInvocation.reject(error);
         } else {
             console.log(`Hub method invocation ${ result.I} completed with result: ${ result.R || '<void>'}`);
@@ -180,6 +192,10 @@ export class HubProxy {
         console.log(`Hub '${this.name}': trigger method '${method}' (${args.length} arguments).`, args);
         this.extendState(state);
         this._eventAggregator.publish(method.toLowerCase(), args);
+    }
+    
+    get hasEventHandlers() : boolean {
+        return this._eventAggregator.hasAnySubscriptions;
     }
 
     state: any;

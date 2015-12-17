@@ -1,6 +1,10 @@
 #signalr-ts
 Signalr-ts is a signalr client library written in TypeScript with 'no' third-party library dependencies (except for polyfills). 
 
+Currently two transports are **supported: WebSockets and LongPolling**. Support for Forever Frame and Server Sent Events is not yet planned, maybe it will sometime in the future.
+
+Only dynamic hu  proxies are supported. I'd like to support dynamically generated proxies in the future. They are, however, tightly coupled to the jQuery version of the JavaScript client.
+
 ##Todo:
 
 * Documentation
@@ -8,7 +12,13 @@ Signalr-ts is a signalr client library written in TypeScript with 'no' third-par
 * Build scripts
 * Implementation:
  * Implement reconnect
+ * Implement ping
  * More resilient error handling.
+ * More/better debug messages
+* Design better api for startup and configuration
+* Create quick start examples. 
+* Polishing the overall codebase
+* Support CORS
 
 ##Build
 The build process of Signalr-ts not completely fleshed out. The goal is to provide several builds for systemjs, amd and stand alone. Right now only the SystemJS version is supported.

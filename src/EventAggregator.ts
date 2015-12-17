@@ -13,6 +13,10 @@ declare type eventCallback = (payload: any, eventName: string) => void;
 export class EventAggregator {
 	private eventLookup: { [key: string]: Array<eventCallback> } = {};
 
+	get hasAnySubscriptions() : boolean {
+		return Object.keys(this.eventLookup).length > 0;
+	} 
+
 	publish(eventName: string, payload?: any) {
 		if (typeof eventName !== 'string') {
 			throw new Error('eventName must be of type string.');
@@ -40,16 +44,20 @@ export class EventAggregator {
 		if (typeof callback !== 'function') {
 			throw new Error('callback must be of type function.');
 		}
+		let eventLookup = this.eventLookup;
+		let subscriptions = eventLookup[eventName] || (eventLookup[eventName] = []);
 
-		let eventLookup = this.eventLookup[eventName] || (this.eventLookup[eventName] = []);
-
-		eventLookup.push(callback);
+		subscriptions.push(callback);
 
 		return {
 			dispose: () => {
-				let id = eventLookup.indexOf(callback);
+				let id = subscriptions.indexOf(callback);
 				if (id !== -1) {
-					eventLookup.splice(id, 1);
+					subscriptions.splice(id, 1);
+				}
+				if(subscriptions.length < 1) {
+					//remove empty subscriptions array.
+					delete eventLookup[eventName];
 				}
 			}
 		}
