@@ -26,7 +26,7 @@ export class WebSocketTransport extends Transport {
         return Promise.resolve(null);
     }
     
-    createSocket() : SocketAlike {
-        return new WebSocket(this.url.connect());
+    connectSocket(reconnect: boolean) : SocketAlike {
+        return new WebSocket(this.url.connect(reconnect));
     }
 }

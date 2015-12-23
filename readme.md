@@ -8,17 +8,19 @@ Only dynamic hu  proxies are supported. I'd like to support dynamically generate
 ##Todo:
 
 * Documentation
+ * Description of api
+ * Examples
+ * Create quick start examples. 
 * Unit tests
-* Build scripts
+* Build scripts for ES5/ES6/AMD/SystemJS
 * Implementation:
- * Implement reconnect
  * Implement ping
  * More resilient error handling.
  * More/better debug messages
 * Design better api for startup and configuration
-* Create quick start examples. 
 * Polishing the overall codebase
 * Support CORS
+* Profile app for possible memory leaks and other issues.
 
 ##Build
 The build process of Signalr-ts not completely fleshed out. The goal is to provide several builds for systemjs, amd and stand alone. Right now only the SystemJS version is supported.

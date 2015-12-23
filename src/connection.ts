@@ -89,8 +89,12 @@ export enum ConnectionState {
     disconnected = 4
 }
 
-
-
+var stateLookup: {[key: number]: string} = {
+    [ConnectionState.connecting]: "connecting",
+    [ConnectionState.connected]: "connected",
+    [ConnectionState.reconnecting]: "reconnecting",
+    [ConnectionState.disconnected]: "disconnected",
+};
 export class Connection {
     private _state: ConnectionState = ConnectionState.connecting;
     private _slowConnection: boolean = false;
@@ -131,6 +135,7 @@ export class Connection {
     public set state(newState: ConnectionState) {
         let oldState = this._state;
         this._state = newState;
+        console.log(`State changed from ${stateLookup[oldState]} to ${stateLookup[newState]}.`);
         this.eventAggregator.publish('stateChanged', <StateChangedEvent>{ oldState, newState });
     }
 
@@ -159,8 +164,7 @@ export class Connection {
 
     connectionLost(): void {
         this.eventAggregator.publish('connectionLost', this);
-        //todo: implement reconnect
-        this.state = ConnectionState.disconnected;
+        this.handleTransportConnectionLoss(this._transport);
     }
 
 
@@ -168,7 +172,7 @@ export class Connection {
         return this._messageSink;
     }
 
-    private setNegotiated(result: NegotiationResult): void {        
+    private setNegotiated(result: NegotiationResult): void {
         this._connectionToken = result.ConnectionToken;
         this._connectionId = result.ConnectionId;
 
@@ -177,6 +181,20 @@ export class Connection {
         this.timeouts.transportConnectTimeout = result.TransportConnectTimeout;
     }
 
+    private handleTransportConnectionLoss(transport: Transport) {
+        if (this._transport === transport && this.state === ConnectionState.connected) {
+            console.warn('Connection interrupted');
+            this.state = ConnectionState.reconnecting;
+            protocol.reconnect(this)
+                .then(() => {
+                    this.state = ConnectionState.connected;
+                })
+                .catch((e: any) => {
+                    console.warn('Failed to reconnect. Stopping connection.', e);
+                    this.stop();
+                });
+        }
+    }
 
     /**
       * Subscribe to incoming messages.
@@ -205,7 +223,7 @@ export class Connection {
         this.eventAggregator.publish('datareceived', data);
 
         var shouldReconnect = typeof (data.T) !== "undefined" && data.T === 1;
-
+        //todo: handle reconnect. 
 
         if (typeof (data.G) !== "undefined") {
             this.groupsToken = data.G;
@@ -218,8 +236,8 @@ export class Connection {
                 this.eventAggregator.publish('message', message));
         }
     }
-    
-    public start(options?: ConnectionConfig): Promise<Connection> {
+
+    start(options?: ConnectionConfig): Promise<Connection> {
 
         return protocol.negotiate(this)
             .then((result: NegotiationResult) => {
@@ -231,9 +249,9 @@ export class Connection {
                     this.monitor.startMonitoring();
                 }
 
+                transport.connectionLost = t => this.handleTransportConnectionLoss(t);
                 this._transport = transport;
-            })
-            .then(() => {
+
                 return protocol.start(this);
             })
             .then(() => {
@@ -248,12 +266,12 @@ export class Connection {
             });
     }
 
-    public stop(): Promise<Connection> {
+    stop(): Promise<Connection> {
         if (this.state === ConnectionState.disconnected) {
             console.warn("Connection is already stopped.");
             return;
         }
-        
+
         console.log('Connection: Stop.');
 
         this.state = ConnectionState.disconnected;

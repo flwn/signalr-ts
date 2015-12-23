@@ -29,8 +29,9 @@ export class UrlBuilder {
         return url;
     }
 
-    connect(): string {
-        var urlPath = this.build('/connect');
+    
+    connect(reconnect: boolean = false): string {
+        var urlPath = this.build(reconnect === true ? '/reconnect' : '/connect');
         urlPath += '&tid=' + Math.floor(Math.random() * 11);
 
         var protocol = location.protocol;

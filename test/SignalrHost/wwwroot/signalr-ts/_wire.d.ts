@@ -9,6 +9,16 @@ interface RawMessageData {
       * Transport Initialized
       */
     S?: number;
+    
+    /**
+     * Long Poll Delay
+     */
+    L?: number;
+    
+    /**
+      * Should reconnect?
+      */
+    T?: number;
 }
 
 
@@ -23,16 +33,6 @@ interface PersistentConnectionData extends RawMessageData {
       * Groups token
       */
     G?: string;
-    
-    /**
-     * Long Poll Delay
-     */
-    L?: number;
-    
-    /**
-      * Should reconnect?
-      */
-    T?: number;
 }
 
 

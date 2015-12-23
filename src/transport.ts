@@ -23,6 +23,10 @@ export class MessageSink {
             return;
         }
 
+        if (typeof message.C !== "undefined") {
+            transport.lastMessageId = message.C;
+        }
+
         if (!this.transportActive) {
             this.messageBuffer.push(message);
 
@@ -57,6 +61,25 @@ export class MessageSink {
     }
 }
 
+enum SocketState {
+    /**
+     * The connection is not yet open.
+     */
+    CONNECTING = 0,
+    /**
+     * The connection is open and ready to communicate.
+     */
+    OPEN = 1,
+    /**
+     * The connection is in the process of closing.
+     */
+    CLOSING = 2,
+    /**
+     * The connection is closed or couldn't be opened.
+     */
+    CLOSED = 3
+}
+
 export enum TransportState {
     Initializing,
     Opened,
@@ -85,8 +108,13 @@ export abstract class Transport {
 
 
     name: string;
+
+    connectionLost: (transport: this) => void;
+
     abstract send(data: any): Promise<any>;
-    protected abstract createSocket(): SocketAlike;
+
+    protected abstract connectSocket(reconnect: boolean): SocketAlike;
+
     get supportsKeepAlive(): boolean {
         return false;
     }
@@ -97,13 +125,15 @@ export abstract class Transport {
         }
         this._state = TransportState.Ready;
         if (!this._onInit) {
-            console.warn('No _onInit handler...');
+            console.log('No _onInit handler...');
         } else {
             this._onInit();
         }
     }
 
     protected _state: TransportState = TransportState.Initializing;
+
+    lastMessageId: string = null;
 
     waitForInit(timeout: Promise<any>): Promise<any> {
         if (this._state === TransportState.Ready) {
@@ -119,6 +149,7 @@ export abstract class Transport {
                     if (initialized) {
                         return;
                     }
+                    delete this._onInit;
                     console.warn('waitForInit: timeout');
                     reject(new Error(`Timout: Could not initialize transport within ${timeout}ms.`));
                     this.close();
@@ -136,7 +167,7 @@ export abstract class Transport {
         return Promise.reject(new Error('Transport closed before init was received.'));
     }
 
-    connect(cancelTimeout: Promise<void>): Promise<void> {
+    connect(cancelTimeout: Promise<void>, reconnect: boolean = false): Promise<void> {
         console.log(`Connecting ${this.name} transport.`);
 
         if (this._socket !== null) {
@@ -144,7 +175,7 @@ export abstract class Transport {
         }
 
         return new Promise<void>((resolve: () => void, reject: (e: any) => void) => {
-            let socket = this.createSocket();
+            let socket = this.connectSocket(reconnect);
             let opened = false;
 
 
@@ -152,6 +183,8 @@ export abstract class Transport {
                 if (opened) {
                     return;
                 }
+
+                console.warn('(Re)connect timed out.', reconnect);
                 socket.close();
                 this._socket = null;
                 reject(new Error('Connect Timeout.'));
@@ -163,7 +196,7 @@ export abstract class Transport {
                 resolve();
             };
 
-            socket.onerror = (ev: Error|ErrorEvent) => {
+            socket.onerror = (ev: Error | ErrorEvent) => {
                 if (ev instanceof Error) {
                     this._sink.transportError(ev);
                 } else if (ev instanceof ErrorEvent) {
@@ -185,22 +218,28 @@ export abstract class Transport {
 
                 if (!cleanClose) {
                     let errorMessage = "Unclean disconnect from socket: " + (ev.reason || "[no reason given].");
-                    console.warn(errorMessage);
+                    console.warn(errorMessage, ev);
                     this._sink.transportError(new Error(errorMessage));
                 }
 
                 if (typeof this._onClose === "function") {
+                    //called from close();
                     this._onClose(cleanClose);
+                } else {
+                    //reconnect?
+                    if (this.connectionLost) {
+                        this.connectionLost(this);
+                    }
                 }
             };
 
             socket.onmessage = (ev: MessageEvent): void => {
-                let messageData = ev.data;
-                if(typeof messageData === 'string') {
+                let messageData = <RawMessageData>ev.data;
+                if (typeof messageData === 'string') {
                     messageData = JSON.parse(ev.data);
                 }
                 console.log('onmessage', messageData);
-               
+
                 this._sink.handleMessage(this, messageData);
             };
 
@@ -213,6 +252,23 @@ export abstract class Transport {
 
         if (this._onClose !== null && this._onClose !== undefined) {
             console.warn('close called twice.');
+        }
+
+        if (this._socket == null) {
+            console.log('No Socket created.');
+            return Promise.resolve(true);
+        }
+
+        if (this._socket.readyState === SocketState.CLOSED) {
+            console.log('Socket already closed.');
+            this._socket = null;
+
+            if (typeof this._onClose === "function") {
+                //should never happen.
+                console.warn('Possible unresolved _onClose promise.')
+            }
+
+            return Promise.resolve(false);
         }
 
         return new Promise((resolve: (cleanClose: boolean) => void) => {

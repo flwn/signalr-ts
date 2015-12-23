@@ -121,6 +121,15 @@ export class ProtocolHelper {
 
     }
 
+    public reconnect(connection: Connection) {
+        let disconnectTimeout = connection.timeouts.disconnectTimeout * 1000;
+        console.log(`reconnecting (Timeout is ${String(disconnectTimeout)}ms).`);
+        let reconnectTimeout = createTimeout(disconnectTimeout);
+
+        return connection.transport.close()
+            .then(() => connection.transport.connect(reconnectTimeout , true));
+    }
+
     public connect(connection: Connection, negotiationResult: NegotiationResult, options: ConnectionConfig = {}): Promise<Transport> {
         let url = connection.url;
 
@@ -138,7 +147,7 @@ export class ProtocolHelper {
         }
 
         if (transports.length < 1) {
-            return Promise.reject(new Error(`No transport configured. Supported transports: ${ Object.keys(transportLookup) } (Server supports WebSockets: ${negotiationResult.TryWebSockets}).`));
+            return Promise.reject(new Error(`No transport configured. Supported transports: ${Object.keys(transportLookup)} (Server supports WebSockets: ${negotiationResult.TryWebSockets}).`));
         }
 
         return connectToFirstAvailable(transports, connection, timeout);
