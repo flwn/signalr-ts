@@ -14,6 +14,7 @@ Only dynamic hu  proxies are supported. I'd like to support dynamically generate
 * Unit tests
 * Build scripts for ES5/ES6/AMD/SystemJS
 * Implementation:
+ * Progress of messages.
  * Implement ping
  * More resilient error handling.
  * More/better debug messages

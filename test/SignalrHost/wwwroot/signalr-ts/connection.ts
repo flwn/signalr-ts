@@ -31,7 +31,7 @@ export interface StateChangedEvent {
 }
 
 
-export class ConnectionMonitor {
+class ConnectionMonitor {
 
     private warnAfter: number;
     private keepAliveTimeout: number;
@@ -89,19 +89,20 @@ export enum ConnectionState {
     disconnected = 4
 }
 
-var stateLookup: {[key: number]: string} = {
+var stateLookup: { [key: number]: string } = {
     [ConnectionState.connecting]: "connecting",
     [ConnectionState.connected]: "connected",
     [ConnectionState.reconnecting]: "reconnecting",
     [ConnectionState.disconnected]: "disconnected",
 };
+
 export class Connection {
     private _state: ConnectionState = ConnectionState.connecting;
     private _slowConnection: boolean = false;
     private _transport: Transport;
     private _urlBuilder: UrlBuilder;
 
-    public monitor: ConnectionMonitor = new ConnectionMonitor(this);
+    private monitor: ConnectionMonitor = new ConnectionMonitor(this);
 
     private eventAggregator: EventAggregator = new EventAggregator();
     private _messageSink: MessageSink = new MessageSink(this);
@@ -123,6 +124,7 @@ export class Connection {
         this._urlBuilder = new UrlBuilder(baseUrl);
     }
 
+    /** @private */
     public markLastMessage(): void {
         this.lastMessageReceived = new Date();
         this.monitor.markLastMessage();
@@ -162,6 +164,7 @@ export class Connection {
         this._slowConnection = isSlowConnection;
     }
 
+    /** @private */
     connectionLost(): void {
         this.eventAggregator.publish('connectionLost', this);
         this.handleTransportConnectionLoss(this._transport);
@@ -184,16 +187,20 @@ export class Connection {
     private handleTransportConnectionLoss(transport: Transport) {
         if (this._transport === transport && this.state === ConnectionState.connected) {
             console.warn('Connection interrupted');
-            this.state = ConnectionState.reconnecting;
-            protocol.reconnect(this)
-                .then(() => {
-                    this.state = ConnectionState.connected;
-                })
-                .catch((e: any) => {
-                    console.warn('Failed to reconnect. Stopping connection.', e);
-                    this.stop();
-                });
+            this.reconnect();
         }
+    }
+
+    private reconnect() {
+        this.state = ConnectionState.reconnecting;
+        protocol.reconnect(this)
+            .then(() => {
+                this.state = ConnectionState.connected;
+            })
+            .catch((e: any) => {
+                console.warn('Failed to reconnect. Stopping connection.', e);
+                this.stop();
+            });
     }
 
     /**
@@ -212,18 +219,26 @@ export class Connection {
         return this.eventAggregator.subscribe('stateChanged', handler);
     }
 
-
+    /** Send data to the server.
+     * @returns a promise which resolves when the data is send.
+     */
     send(data: any): Promise<void> {
         return this._transport.send(data);
     }
 
 
+    /** This method is used internally by the signalr client for handling incoming data. 
+     * @private
+    */
     handleData(data: PersistentConnectionData) {
 
         this.eventAggregator.publish('datareceived', data);
 
         var shouldReconnect = typeof (data.T) !== "undefined" && data.T === 1;
-        //todo: handle reconnect. 
+        if (shouldReconnect) {
+            console.log('Server says "You Should reconnect". So we try...');
+            this.reconnect();
+        }
 
         if (typeof (data.G) !== "undefined") {
             this.groupsToken = data.G;
@@ -237,6 +252,11 @@ export class Connection {
         }
     }
 
+    /**
+     * Starts the connection.
+     * @param {ConnectionConfig} options - Configuration for this connection.
+     * @returns a Promise of `this` which resolves when the connection is succesfully started.
+     */
     start(options?: ConnectionConfig): Promise<Connection> {
 
         return protocol.negotiate(this)
@@ -266,6 +286,10 @@ export class Connection {
             });
     }
 
+    /**
+     * Starts the connection.
+     * @returns a Promise of `this` which resolves when the connection is stopped.
+     */
     stop(): Promise<Connection> {
         if (this.state === ConnectionState.disconnected) {
             console.warn("Connection is already stopped.");

@@ -42,9 +42,9 @@ class PollSocket implements SocketAlike {
 
     private handlePollResponse(responseBody: RawMessageData) {
 
-        this.onmessage({ data: responseBody });
-
         this._lastMessageId = responseBody.C;
+        
+        this.onmessage({ data: responseBody });
 
         if (typeof responseBody.L === "number") {
             //Long Poll Delay is set 
@@ -148,6 +148,8 @@ class PollSocket implements SocketAlike {
 
         clearTimeout(this._pollTimeout);
         delete this._pollTimeout;
+        clearTimeout(this._reconnectTimeout);
+        delete this._reconnectTimeout;
 
         if (typeof this.onclose === "function") {
             this.onclose({ wasClean, code, reason });
@@ -182,8 +184,6 @@ class PollSocket implements SocketAlike {
 }
 
 export class LongPollingTransport extends Transport {
-
-    private _lastId: string;
 
     private _reconnectCount = 0;
 

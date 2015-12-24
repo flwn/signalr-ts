@@ -37,10 +37,14 @@ export class HubConnection extends Connection {
         return Object.keys(this._hubs);
     }
 
+    /**
+     * Get a reference to a hub proxy. 
+     * @param {string} name - The name of the hub.  
+     */
     hub(name: string): HubProxy {
         let lcaseName = name.toLowerCase();
         if (false === this._hubs.hasOwnProperty(lcaseName)) {
-            if(this.state === ConnectionState.connected) {
+            if(this.state === ConnectionState.connected || this.state === ConnectionState.reconnecting) {
                 throw new Error('Cannot register hub after de connecting has been started.')
             }
             this._hubs[lcaseName] = new HubProxy(name, this);
@@ -48,6 +52,9 @@ export class HubConnection extends Connection {
         return this._hubs[lcaseName];
     }
     
+    /** Register multiple hubs at once.
+     * @returns an array of HubProxy instances.
+     */
     registerHubs(...names: string[]): HubProxy[] {
         return names.map(hub => this.hub(hub));
     }
@@ -87,6 +94,7 @@ export class HubConnection extends Connection {
 
     /**
      * Starts the hub connection and registers hubs with at least one client event subscription.
+     * @returns a promise which resolves when the connection is started.
      */
     start() : Promise<HubConnection> {
         let activeHubs = this.hubNames
@@ -97,6 +105,10 @@ export class HubConnection extends Connection {
         return super.start();
     }
 
+    /**
+     * Stops the hub connection and rejects all pending invoications.
+     * @returns a promise which resolves when the connection is stopped.
+     */
     stop(): Promise<HubConnection> {
         let stopPromise = super.stop();
 
@@ -146,7 +158,12 @@ export class HubConnection extends Connection {
     handleInvocationResult(result: HubInvocationErrorResult|HubInvocationResult) {
         let invocationId = result.I;
         let pendingInvocation = this._pendingInvocations[invocationId];
-
+        
+        if(result.P) {
+            console.log('Progress messages are not supported. Skip hub response.');
+            return;
+        }
+        
         if (!pendingInvocation) {
             console.warn(`Invoication with id ${invocationId} not found.`);
             return;
@@ -180,14 +197,27 @@ export class HubProxy {
     constructor(public name: string, private connection: HubConnection) {
     }
 
+    /** Invokes a method on the server.
+     * @param method - The method to invoke.
+     * @param args - The method arguments.
+     * @returns a promise which resolves when the method is succesfully invoked at the server.
+     */
     invoke(method: string, ...args: any[]): Promise<any> {
         return this.connection.invokeHubMethod(this, method, ...args);
     }
 
+    /** Registers an event handler for a client side event, invoked by the server.
+     * @param method - The method to register the callback for.
+     * @param callback - The callback to handle the event.
+     * @returns an object with a dispose method to unregister the event handler.
+     */
     on(method: string, callback: (...args: any[]) => void): disposer {
         return this._eventAggregator.subscribe(method.toLowerCase(), callback);
     }
     
+    /** This method is used by the hubConnection to invoke a client side event.
+     * @private
+     */
     trigger(method: string, args: any[], state?: any): void {
         console.log(`Hub '${this.name}': trigger method '${method}' (${args.length} arguments).`, args);
         this.extendState(state);
@@ -198,6 +228,7 @@ export class HubProxy {
         return this._eventAggregator.hasAnySubscriptions;
     }
 
+    /** State information, shared by the client and the server. */
     state: any;
     
     extendState(state: any) {
