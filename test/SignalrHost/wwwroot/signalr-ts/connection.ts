@@ -1,6 +1,5 @@
 ///<reference path="./_wire.d.ts" />
 import {Transport, MessageSink} from './transport';
-import {ProtocolHelper} from './protocol';
 import {UrlBuilder} from './url';
 import {protocol, EventAggregator, ConnectionConfig} from './config';
 

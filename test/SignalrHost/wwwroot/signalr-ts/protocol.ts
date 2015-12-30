@@ -4,9 +4,8 @@ import {Connection} from './connection';
 import {Transport, MessageSink} from './transport';
 import {LongPollingTransport} from './transport-longpolling';
 import {WebSocketTransport} from './transport-websocket';
-import {ConnectionConfig} from './config';
+import {ConnectionConfig, http} from './config';
 import {UrlBuilder} from './url';
-import 'fetch';
 
 interface TransportConstructor {
     new (url: UrlBuilder, messageSink: MessageSink): Transport;
@@ -109,8 +108,7 @@ export class ProtocolHelper {
         let url = connection.url;
         var negotiateUrl = url.negotiate();
 
-        return fetch(negotiateUrl)
-            .then(response => response.json<NegotiationResult>())
+        return http.get<NegotiationResult>(negotiateUrl)
             .then((negotiationResult: NegotiationResult) => {
                 url.connectionId = negotiationResult.ConnectionId;
                 url.connectionToken = negotiationResult.ConnectionToken;
@@ -156,8 +154,7 @@ export class ProtocolHelper {
     public start(connection: Connection): Promise<any> {
         let startUrl = connection.url.start();
 
-        return fetch(startUrl)
-            .then(response => response.json<StartResponse>())
+        return http.get<StartResponse>(startUrl)
             .then((response: StartResponse): void => {
                 if (typeof (response) !== "object" || response === null || response.Response !== "started") {
                     throw new Error('Start not succeeded');
@@ -171,6 +168,6 @@ export class ProtocolHelper {
 
         connection.transport.close();
 
-        return fetch(abortUrl, { method: 'POST', body: '' });
+        return http.post(abortUrl, null);
     }
 }

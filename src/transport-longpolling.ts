@@ -1,10 +1,7 @@
-///<reference path="../typings/tsd.d.ts" />
 ///<reference path="./_wire.d.ts" />
-
 import {Transport, MessageSink, TransportState, SocketAlike} from './transport';
 import {UrlBuilder} from './url';
-import 'fetch';
-
+import {http} from './config';
 
 
 interface MessageEvent {
@@ -23,6 +20,19 @@ enum SocketState {
 }
 function noop() { }
 
+
+function createEvent(name: string) {
+    try {
+        return new Event(name);
+    } catch (e) {
+        // Internet Explorer doesn't support the Event constructor.
+        // Simple try catch because this is not in our hot path.
+        let event = document.createEvent('Event');
+        event.initEvent(name, false, false);
+        return event;
+    }
+}
+
 class PollSocket implements SocketAlike {
 
     constructor(private url: UrlBuilder, lastMessageId: string) {
@@ -31,10 +41,10 @@ class PollSocket implements SocketAlike {
 
     readyState: SocketState = SocketState.Opening;
 
-    onopen: (ev: Event) => void;
-    onclose: (ev: CloseEvent) => void;
-    onmessage: (message: MessageEvent) => void;
-    onerror: (error: any) => void;
+    onopen: (ev: Event) => void = null;
+    onclose: (ev: CloseEvent) => void = null;
+    onmessage: (message: MessageEvent) => void = null;
+    onerror: (error: any) => void = null;
 
     private _lastMessageId: string;
     private _pollTimeout: number;
@@ -43,7 +53,7 @@ class PollSocket implements SocketAlike {
     private handlePollResponse(responseBody: RawMessageData) {
 
         this._lastMessageId = responseBody.C;
-        
+
         this.onmessage({ data: responseBody });
 
         if (typeof responseBody.L === "number") {
@@ -63,8 +73,7 @@ class PollSocket implements SocketAlike {
             return Promise.reject(new Error('socket closed.'));
         }
 
-        let promise = fetch(url)
-            .then(r => r.json<RawMessageData>());
+        let promise = http.get<RawMessageData>(url);
 
         promise.catch((e: Error) => {
             this.onerror(e);
@@ -93,12 +102,9 @@ class PollSocket implements SocketAlike {
             formdata.append('messageId', this._lastMessageId);
         }
 
-
-        var options = isReconnecting ? { method: 'POST', body: formdata } : undefined;
-        let promise = fetch(connectUrl, options)
-            .then((response: Response) => {
-                return response.json<RawMessageData>();
-            });
+        let promise = (isReconnecting ?
+            http.post<RawMessageData>(connectUrl, formdata) :
+            http.get<RawMessageData>(connectUrl));
 
         promise.then((responseBody: RawMessageData) => {
 
@@ -128,7 +134,7 @@ class PollSocket implements SocketAlike {
             let reconnectHeuristic = Math.min(1000 * (2 ** reconnectCount - 1), 1000 * 60 * 60);
             this._reconnectTimeout = setTimeout(() => this.fireOpened(), reconnectHeuristic);
         }
-        
+
         promise.catch(e => {
             console.warn('error while connecting longPolling', e);
             this._close(false);
@@ -140,7 +146,7 @@ class PollSocket implements SocketAlike {
     fireOpened() {
         this.readyState = SocketState.Opened;
         clearTimeout(this._reconnectTimeout);
-        this.onopen(new Event("OpenEvent"));
+        this.onopen(createEvent("OpenEvent"));
     }
 
     private _close(wasClean: boolean, code?: number, reason?: string) {
@@ -177,8 +183,7 @@ class PollSocket implements SocketAlike {
         let formdata = new FormData();
         formdata.append('data', body);
 
-        return fetch(url, { method: 'POST', body: formdata })
-            .then((response: Response) => response.json<RawMessageData>())
+        return http.post<RawMessageData>(url, formdata )
             .then(response => this.onmessage({ data: response }));
     }
 }
@@ -224,8 +229,7 @@ export class LongPollingTransport extends Transport {
             throw new Error('Transport is not ready for sending.');
         }
 
-        let payload = typeof (data) === "string" ? data : JSON.stringify(data);
-        return (<PollSocket>this._socket).send(payload);
+        return (<PollSocket>this._socket).send(data);
     }
 
 }
