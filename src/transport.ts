@@ -1,5 +1,6 @@
 ﻿///<reference path="./_wire.d.ts" />
 import {Connection}  from './connection';
+import {getLogger} from './logging';
 
 
 export class MessageSink {

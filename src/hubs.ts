@@ -1,7 +1,7 @@
 ﻿///<reference path="./_wire.d.ts" />
 import {Connection, ConnectionState} from './connection';
 import {EventAggregator} from './config';
-
+import {Logger} from './logging';
 
 interface Lookup<TVal> {
     [key: string]: TVal;
@@ -47,7 +47,7 @@ export class HubConnection extends Connection {
             if(this.state === ConnectionState.connected || this.state === ConnectionState.reconnecting) {
                 throw new Error('Cannot register hub after de connecting has been started.')
             }
-            this._hubs[lcaseName] = new HubProxy(name, this);
+            this._hubs[lcaseName] = new HubProxy(name, this, this.logger);
         }
         return this._hubs[lcaseName];
     }
@@ -64,7 +64,7 @@ export class HubConnection extends Connection {
     }
 
     handleData(data: HubInvocationResult|HubConnectionData) {
-        console.log('handle hub data', data);
+        this.logger.log('handle hub data', data);
         
         if (isHubInvocationResult(data)) {
             this.handleInvocationResult(data);
@@ -80,7 +80,7 @@ export class HubConnection extends Connection {
                         let proxy = this._hubs[hubName];
                         proxy.trigger(method, msg.A, msg.S);
                     } else {
-                        console.warn(`No proxy for hub '${hubName}' to invoke method '${method}' on.`);
+                        this.logger.warn(`No proxy for hub '${hubName}' to invoke method '${method}' on.`);
                     }
                 });
                 //prevent double handling of messages by the connection;
@@ -148,7 +148,7 @@ export class HubConnection extends Connection {
     
             super.send(invocation)
                 .catch((e) => {
-                    console.warn(`Error sending hub method invocation with id ${id}.`, e);
+                    this.logger.warn(`Error sending hub method invocation with id ${id}.`, e);
                     delete this._pendingInvocations[id];
                     reject(e);
                 });
@@ -160,12 +160,12 @@ export class HubConnection extends Connection {
         let pendingInvocation = this._pendingInvocations[invocationId];
         
         if(result.P) {
-            console.log('Progress messages are not supported. Skip hub response.');
+            this.logger.log('Progress messages are not supported. Skip hub response.');
             return;
         }
         
         if (!pendingInvocation) {
-            console.warn(`Invoication with id ${invocationId} not found.`);
+            this.logger.warn(`Invoication with id ${invocationId} not found.`);
             return;
         }
         
@@ -178,14 +178,14 @@ export class HubConnection extends Connection {
         if (isErrorResult(result)) {
             if (result.T) {
                 //stacktrace
-                console.error(`HubInvocationErrorResult '${result.E}'. Stack trace:\n${result.T}`);
+                this.logger.error(`HubInvocationErrorResult '${result.E}'. Stack trace:\n${result.T}`);
             }
             let error = new Error(result.E);
             error['source'] = result.H ? "HubException" : "Exception";
             error['data'] = result.D;
             pendingInvocation.reject(error);
         } else {
-            console.log(`Hub method invocation ${ result.I} completed with result: ${ result.R || '<void>'}`);
+            this.logger.log(`Hub method invocation ${ result.I} completed with result: ${ result.R || '<void>'}`);
             pendingInvocation.resolve(result.R);
         }
     }
@@ -194,7 +194,7 @@ export class HubConnection extends Connection {
 export class HubProxy {
     private _eventAggregator: EventAggregator = new EventAggregator();
 
-    constructor(public name: string, private connection: HubConnection) {
+    constructor(public name: string, private connection: HubConnection, private logger: Logger) {
     }
 
     /** Invokes a method on the server.
@@ -219,7 +219,7 @@ export class HubProxy {
      * @private
      */
     trigger(method: string, args: any[], state?: any): void {
-        console.log(`Hub '${this.name}': trigger method '${method}' (${args.length} arguments).`, args);
+        this.logger.log(`Hub '${this.name}': trigger method '${method}' (${args.length} arguments).`, args);
         this.extendState(state);
         this._eventAggregator.publish(method.toLowerCase(), args);
     }

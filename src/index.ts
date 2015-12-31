@@ -1,9 +1,6 @@
 ﻿import {Connection} from './connection';
-export {Connection} from './connection';
-
 import {HubConnection} from './hubs';
-
-export {HubConnection} from './hubs';
+import * as config from './config';
 
 export function hubConnection(path: string = '/signalr', hubs: string[] = []): HubConnection {
 	var connection = new HubConnection(path);
@@ -19,3 +16,8 @@ export function persistentConnection(path: string): Connection {
 	}
 	return new Connection(path);
 }
+
+
+export { config as config}; 
+export { Connection as Connection}; 
+export { HubConnection as HubConnection}; 

@@ -2,24 +2,24 @@
 import 'fetch';
 
 
-
-export class HttpClient {
+/**
+ * This class is a simple api for firing XMLHttpRequests. This one implements the get and post methods using the fetch api.
+ */
+export class FetchHttpClient {
     
+    /** Shorthand for a fetch request with method 'POST'. */
     post<TResponse>(url: string, formData?: FormData): Promise<TResponse> {
         let requestInit = { method: 'POST', body: formData };
         
-        return this.fetch(url, requestInit)
+        return fetch(url, requestInit)
             .then(r => r.json<TResponse>());
     }
     
+    /** Shorthand for a fetch request with method 'GET'. */
     get<TResponse>(url: string): Promise<TResponse> {
         
-        return this.fetch(url)
+        return fetch(url)
             .then(r => r.json<TResponse>());
-    }
-    
-	fetch(url: string|Request, init?: RequestInit): Promise<Response> {
-        return fetch(url, init);
     }
     
 }

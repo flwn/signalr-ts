@@ -3,6 +3,8 @@ import {Transport, MessageSink} from './transport';
 import {UrlBuilder} from './url';
 import {protocol, EventAggregator, ConnectionConfig} from './config';
 
+import {LogLevel, LogSource, setLogLevel, getLogger, Logger} from './logging';
+
 export type disposer = { dispose: () => void };
 
 
@@ -29,7 +31,6 @@ export interface StateChangedEvent {
     newState: ConnectionState;
 }
 
-
 class ConnectionMonitor {
 
     private warnAfter: number;
@@ -37,7 +38,10 @@ class ConnectionMonitor {
 
     private _heartBeatInterval: number;
 
+    private logger: Logger;
+
     constructor(private connection: Connection) {
+        this.logger = getLogger(connection);
     }
 
     markLastMessage(): void {
@@ -49,16 +53,16 @@ class ConnectionMonitor {
         this.warnAfter = checkInterval * 2;
 
         this._heartBeatInterval = setInterval(() => this.checkKeepAlive(), checkInterval);
-        console.log(`Start monitoring keepAlive every ${checkInterval}ms.`);
+        this.logger.log(`Start monitoring keepAlive every ${checkInterval}ms.`);
     }
 
     stopMonitoring(): void {
         clearInterval(this._heartBeatInterval);
-        console.info('monitoring stopped');
+        this.logger.info('monitoring stopped');
     }
 
     checkKeepAlive() {
-        console.debug('checkKeepAlive');
+        this.logger.log('checkKeepAlive');
         if (this.connection.state !== ConnectionState.connected) {
             return;
         }
@@ -66,14 +70,14 @@ class ConnectionMonitor {
         let lastReceived = Date.now() - this.connection.lastMessageReceived.getTime();
 
         if (lastReceived > this.keepAliveTimeout) {
-            console.warn('ConnectionMonitor: connection exceeded keepAlive timeout. Connection probably lost.')
+            this.logger.warn('ConnectionMonitor: connection exceeded keepAlive timeout. Connection probably lost.')
             this.connection.connectionLost();
 
             return;
         }
 
         if (lastReceived > this.warnAfter) {
-            console.warn('ConnectionMonitor: connection exceeded 2/3th of the keepAlive timeout. Connection probably slow.')
+            this.logger.warn('ConnectionMonitor: connection exceeded 2/3th of the keepAlive timeout. Connection probably slow.')
             this.connection.slowConnection = true;
         } else {
             this.connection.slowConnection = false;
@@ -95,11 +99,15 @@ var stateLookup: { [key: number]: string } = {
     [ConnectionState.disconnected]: "disconnected",
 };
 
-export class Connection {
+
+export class Connection implements LogSource {
     private _state: ConnectionState = ConnectionState.connecting;
     private _slowConnection: boolean = false;
     private _transport: Transport;
     private _urlBuilder: UrlBuilder;
+
+    protected logger: Logger = getLogger(this);
+    logSourceId: string = "Connection";
 
     private monitor: ConnectionMonitor = new ConnectionMonitor(this);
 
@@ -136,8 +144,15 @@ export class Connection {
     public set state(newState: ConnectionState) {
         let oldState = this._state;
         this._state = newState;
-        console.log(`State changed from ${stateLookup[oldState]} to ${stateLookup[newState]}.`);
+        this.logger.log(`State changed from ${stateLookup[oldState]} to ${stateLookup[newState]}.`);
         this.eventAggregator.publish('stateChanged', <StateChangedEvent>{ oldState, newState });
+    }
+
+    public get logLevel(): LogLevel {
+        return this.logger.level;
+    }
+    public set logLevel(value: LogLevel) {
+        setLogLevel(this, value);
     }
 
     public get transport(): Transport {
@@ -185,7 +200,7 @@ export class Connection {
 
     private handleTransportConnectionLoss(transport: Transport) {
         if (this._transport === transport && this.state === ConnectionState.connected) {
-            console.warn('Connection interrupted');
+            this.logger.warn('Connection interrupted');
             this.reconnect();
         }
     }
@@ -197,7 +212,7 @@ export class Connection {
                 this.state = ConnectionState.connected;
             })
             .catch((e: any) => {
-                console.warn('Failed to reconnect. Stopping connection.', e);
+                this.logger.warn('Failed to reconnect. Stopping connection.', e);
                 this.stop();
             });
     }
@@ -235,7 +250,7 @@ export class Connection {
 
         var shouldReconnect = typeof (data.T) !== "undefined" && data.T === 1;
         if (shouldReconnect) {
-            console.log('Server says "You Should reconnect". So we try...');
+            this.logger.info('Server says "You Should reconnect". So we try...');
             this.reconnect();
         }
 
@@ -291,11 +306,11 @@ export class Connection {
      */
     stop(): Promise<Connection> {
         if (this.state === ConnectionState.disconnected) {
-            console.warn("Connection is already stopped.");
+            this.logger.warn("Connection is already stopped.");
             return;
         }
 
-        console.log('Connection: Stop.');
+        this.logger.log('Connection: Stop.');
 
         this.state = ConnectionState.disconnected;
 

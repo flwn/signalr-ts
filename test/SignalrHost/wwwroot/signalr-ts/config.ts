@@ -1,12 +1,13 @@
 import {ProtocolHelper} from './protocol';
-import {HttpClient} from './http';
+import {FetchHttpClient} from './http';
 
 export var protocol = new ProtocolHelper();
 
 export {EventAggregator} from './EventAggregator';
 
+export {setDefaultLogLevel} from './logging';
 
-export var http = new HttpClient();
+export var http = new FetchHttpClient();
 
 /**
  * Configure the connection with these settings.
