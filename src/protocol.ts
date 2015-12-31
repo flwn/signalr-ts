@@ -1,54 +1,18 @@
 ﻿///<reference path="./_wire.d.ts" />
 
 import {Connection} from './connection';
-import {Transport, MessageSink} from './transport';
-import {LongPollingTransport} from './transport-longpolling';
-import {WebSocketTransport} from './transport-websocket';
-import {ConnectionConfig, http} from './config';
-import {UrlBuilder} from './url';
+import {Transport, TransportState, InitEvent} from './transport';
+import {ConnectionConfig, getTransportConfiguration} from './config';
 
-interface TransportConstructor {
-    new (url: UrlBuilder, messageSink: MessageSink): Transport;
-    name: string;
-}
 
-var defaultTransportOrder = [WebSocketTransport, LongPollingTransport];
-
-var transportLookup: { [key: string]: TransportConstructor } = {
-    'websockets': WebSocketTransport,
-    'longpolling': LongPollingTransport
-};
-
-function createTransportOrderList(configuredTransport?: string | string[]): TransportConstructor[] {
-
-    if (typeof configuredTransport === 'string') {
-        let transportName = configuredTransport.toLowerCase();
-
-        if (transportLookup.hasOwnProperty(transportName)) {
-            return [transportLookup[transportName]];
-        }
-
-    } else if (Array.isArray(configuredTransport)) {
-        let transportOrder: TransportConstructor[] = [];
-
-        for (let i = 0; i < configuredTransport.length; i++) {
-            let transportName = configuredTransport[i].toLowerCase();
-            if (transportLookup.hasOwnProperty(transportName)) {
-                transportOrder.push(transportLookup[transportName]);
-            }
-        }
-        return transportOrder;
-    }
-
-    return defaultTransportOrder;
-}
-
-function buildTransport(transportConstructor: TransportConstructor, connection: Connection): Transport {
+function buildTransport(transport: string, connection: Connection): Transport {
+    let transportFactory = getTransportConfiguration(transport, connection.config);
     let url = connection.url;
     let messageSink = connection.messageSink;
-    url.transport = transportConstructor.name;
+    url.transport = transportFactory.name;
 
-    let instance: Transport = new transportConstructor(url, messageSink);
+    let instance: Transport = new Transport(transportFactory, connection);
+
 
     return instance;
 }
@@ -57,7 +21,7 @@ function tryWithinTime<T>(promise: Promise<T>, timeout: number): Promise<T> {
     return new Promise((resolve: (r: T) => void, reject: (e: Error) => void) => {
         var timer = setTimeout(() => {
             console.warn('tryConnect: timeout');
-            reject(new Error(`Timout: Could not initialize transport within ${timeout}ms.`));
+            reject(new Error(`Timeout: Could not initialize transport within ${timeout}ms.`));
         }, timeout);
 
         promise.then((r: T) => {
@@ -67,9 +31,9 @@ function tryWithinTime<T>(promise: Promise<T>, timeout: number): Promise<T> {
     });
 }
 
-function createTimeout(timeout: number): Promise<void> {
-    return new Promise<void>((resolve: () => void, reject: (e: Error) => void) => {
-        var timer = setTimeout(() => { resolve(); }, timeout);
+function createTimeout(timeout: number): Promise<number> {
+    return new Promise<number>((resolve: (result: number) => void, reject: (e: Error) => void) => {
+        var timer = setTimeout(() => { resolve(timeout); }, timeout);
     });
 }
 
@@ -78,21 +42,21 @@ function tryConnect(nextTransportInLine: () => Transport, timeout: number): Prom
     let transport: Transport = nextTransportInLine();
 
     if (transport === null) {
-        return Promise.reject(new Error('Could not connect to transport.'));
+        return Promise.reject<Transport>(new Error('Could not connect to transport.'));
     }
     var timeoutPromise = createTimeout(timeout);
     var connectPromise = transport.connect(timeoutPromise)
-        .then(() => transport.waitForInit(timeoutPromise))
+        .then(() => waitForInitializedTransport(transport, timeoutPromise))
         .then(() => transport);
 
     return tryWithinTime<Transport>(connectPromise, timeout)
         .catch(e => {
-            console.warn(`Failed to connect using ${transport.name} transport.`, e);
+            console.warn(`Failed to connect using ${transport.protocol} transport.`, e);
             return tryConnect(nextTransportInLine, timeout);
         });
 }
 
-function connectToFirstAvailable(transportOrder: TransportConstructor[], connection: Connection, timeout: number): Promise<Transport> {
+function connectToFirstAvailable(transportOrder: string[], connection: Connection, timeout: number): Promise<Transport> {
 
     return tryConnect(() => {
         if (transportOrder.length === 0) {
@@ -102,11 +66,59 @@ function connectToFirstAvailable(transportOrder: TransportConstructor[], connect
     }, timeout);
 }
 
+
+function waitForInitializedTransport(transport: Transport, timeoutPromise: Promise<number>): Promise<any> {
+    if (transport.state === TransportState.Ready) {
+        return Promise.resolve(true);
+    }
+
+    if (transport.state < TransportState.Ready) {
+
+        return new Promise((resolve, reject) => {
+            let initialized = false;
+
+            let oninit = transport.oninit = ev => handleInitEvent(ev);
+
+            timeoutPromise.then((timeout) => {
+                if (initialized) {
+                    return;
+                }
+                console.warn('waitForInit: timeout');
+                handleInitEvent(new Error(`Timout: Could not initialize transport within ${timeout}ms.`));
+            });
+
+            function handleInitEvent(ev: Error | InitEvent) {
+                if (initialized) {
+                    return;
+                }
+
+                initialized = true;
+
+                if (transport.oninit === oninit) {
+                    delete transport.oninit;
+                }
+
+                if ((<InitEvent>ev).correlationId) {
+                    resolve();
+                } else {
+                    reject(ev);
+                    transport.close();
+                }
+            }
+        });
+    }
+
+    return Promise.reject(new Error('Transport closed before init was received.'));
+}
+
 export class ProtocolHelper {
 
     public negotiate(connection: Connection): Promise<NegotiationResult> {
         let url = connection.url;
-        var negotiateUrl = url.negotiate();
+        let negotiateUrl = url.negotiate();
+        let http = connection.config.http;
+
+
 
         return http.get<NegotiationResult>(negotiateUrl)
             .then((negotiationResult: NegotiationResult) => {
@@ -125,7 +137,7 @@ export class ProtocolHelper {
         let reconnectTimeout = createTimeout(disconnectTimeout);
 
         return connection.transport.close()
-            .then(() => connection.transport.connect(reconnectTimeout , true));
+            .then(() => connection.transport.connect(reconnectTimeout, true));
     }
 
     public connect(connection: Connection, negotiationResult: NegotiationResult, options: ConnectionConfig = {}): Promise<Transport> {
@@ -135,17 +147,17 @@ export class ProtocolHelper {
         let messageSink = connection.messageSink;
         let timeout = negotiationResult.TransportConnectTimeout * 1000;
 
-        let transports: TransportConstructor[] = createTransportOrderList(options.transport);
+        let transports: string[] = connection.config.transportOrder.slice();
 
         if (false === negotiationResult.TryWebSockets) {
-            let websocketsIndex = transports.indexOf(WebSocketTransport);
+            let websocketsIndex = transports.indexOf('websockets');
             if (websocketsIndex >= 0) {
                 transports.splice(websocketsIndex, 1);
             }
         }
 
         if (transports.length < 1) {
-            return Promise.reject(new Error(`No transport configured. Supported transports: ${Object.keys(transportLookup)} (Server supports WebSockets: ${negotiationResult.TryWebSockets}).`));
+            return Promise.reject<Transport>(new Error(`No transport configured. Supported transports: ${Object.keys(null)} (Server supports WebSockets: ${negotiationResult.TryWebSockets}).`));
         }
 
         return connectToFirstAvailable(transports, connection, timeout);
@@ -153,6 +165,7 @@ export class ProtocolHelper {
 
     public start(connection: Connection): Promise<any> {
         let startUrl = connection.url.start();
+        let http = connection.config.http;
 
         return http.get<StartResponse>(startUrl)
             .then((response: StartResponse): void => {
@@ -165,6 +178,7 @@ export class ProtocolHelper {
 
     public abort(connection: Connection): Promise<any> {
         let abortUrl = connection.url.abort();
+        let http = connection.config.http;
 
         connection.transport.close();
 

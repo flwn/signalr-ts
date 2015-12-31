@@ -1,32 +1,24 @@
-import {Transport, MessageSink, TransportState, SocketAlike} from './transport';
+import {Transport, SocketAlike, TransportConfiguration, Transformer} from './transport';
 import {UrlBuilder} from './url';
 
-export class WebSocketTransport extends Transport {
 
-    constructor(private url: UrlBuilder, sink: MessageSink) {
-        super(sink);
-    }
+function transformSend(data: any): any {
+    let payload = typeof (data) === "string" ? data : JSON.stringify(data);
 
-    static get name(): string {
-        return "webSockets";
-    }
-    get name(): string {
-        return "webSockets";
-    }
+    return payload;
+}
 
-
-    get supportsKeepAlive(): boolean {
-        return true;
-    }
-
-    send(data: any): Promise<any> {
-        let payload = typeof (data) === "string" ? data : JSON.stringify(data);
-
-        this._socket.send(payload);
-        return Promise.resolve(null);
-    }
+export default class webSockets implements TransportConfiguration {
+    public static name: string = "webSockets";
     
-    connectSocket(reconnect: boolean) : SocketAlike {
-        return new WebSocket(this.url.connect(reconnect));
+    name = webSockets.name;
+    supportsKeepAlive = true;
+
+    connectSocket(uri: UrlBuilder, reconnect: boolean, transport: Transport): SocketAlike {
+        return new WebSocket(uri.connect(reconnect));
+    }
+
+    createSendTransformer(): Transformer {
+        return transformSend;
     }
 }

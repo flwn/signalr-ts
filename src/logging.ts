@@ -26,7 +26,7 @@ export interface LogSource {
     logSourceId: string;
 }
 
-const LoggerKey = Symbol('loglevel');
+const LoggerKey = '__loglevel';
 
 export function getLogger(source: LogSource): Logger {
     if (typeof source !== "object" || source === null) {

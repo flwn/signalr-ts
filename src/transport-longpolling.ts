@@ -1,8 +1,8 @@
 ///<reference path="./_wire.d.ts" />
-import {Transport, MessageSink, TransportState, SocketAlike} from './transport';
+import {Transport, SocketAlike, TransportConfiguration, Transformer} from './transport';
 import {UrlBuilder} from './url';
-import {http} from './config';
-
+import {Configuration} from './config';
+import {FetchHttpClient} from './http';
 
 interface MessageEvent {
     data: RawMessageData;
@@ -35,7 +35,7 @@ function createEvent(name: string) {
 
 class PollSocket implements SocketAlike {
 
-    constructor(private url: UrlBuilder, lastMessageId: string) {
+    constructor(private url: UrlBuilder, lastMessageId: string, private http: FetchHttpClient) {
         this._lastMessageId = lastMessageId;
     }
 
@@ -69,13 +69,14 @@ class PollSocket implements SocketAlike {
 
         var url = this.url.poll(this._lastMessageId);
         if (this.readyState !== SocketState.Opened) {
-            console.log('socket closed.');
-            return Promise.reject(new Error('socket closed.'));
+            console.log('socket closed.', this.readyState);
+            return Promise.reject<PersistentConnectionData>(new Error('socket closed.'));
         }
 
-        let promise = http.get<RawMessageData>(url);
+        let promise = this.http.get<RawMessageData>(url);
 
         promise.catch((e: Error) => {
+            console.error("--->> poll error!", arguments)
             this.onerror(e);
             this._close(false);
         });
@@ -103,8 +104,9 @@ class PollSocket implements SocketAlike {
         }
 
         let promise = (isReconnecting ?
-            http.post<RawMessageData>(connectUrl, formdata) :
-            http.get<RawMessageData>(connectUrl));
+            this.http.post<RawMessageData>(connectUrl, formdata) :
+            this.http.get<RawMessageData>(connectUrl));
+
 
         promise.then((responseBody: RawMessageData) => {
 
@@ -114,12 +116,15 @@ class PollSocket implements SocketAlike {
                     return;
                 }
 
-                this.fireOpened();
-
                 if (typeof (responseBody.S) !== "number") {
                     //it is possible to receive messages before init request is received.
                     console.warn('Expected S property on first server response.');
                 }
+            }
+
+            if (!isReconnecting || this.readyState !== SocketState.Opened) {
+                //the _reconnectTimeout could fire before this request is handled.
+                this.fireOpened();
             }
 
             this.handlePollResponse(responseBody);
@@ -183,53 +188,49 @@ class PollSocket implements SocketAlike {
         let formdata = new FormData();
         formdata.append('data', body);
 
-        return http.post<RawMessageData>(url, formdata )
+        return this.http.post<RawMessageData>(url, formdata)
             .then(response => this.onmessage({ data: response }));
     }
 }
 
-export class LongPollingTransport extends Transport {
+function transformSend(data: any): any {
+    let payload = typeof (data) === "string" ? data : JSON.stringify(data);
 
-    private _reconnectCount = 0;
+    return payload;
+}
 
-    constructor(private url: UrlBuilder, sink: MessageSink) {
-        super(sink);
+const reconnectCounter = '__reconnectCount';
+
+export default class longPolling implements TransportConfiguration {
+    static name = "longPolling";
+    
+    name = longPolling.name;
+    supportsKeepAlive = false;
+
+    constructor(private configuration: Configuration) {
     }
 
-    static get name(): string {
-        return "longPolling";
-    }
-    get name(): string {
-        return "longPolling";
-    }
-
-    get supportsKeepAlive(): boolean {
-        return false;
-    }
-
-
-    connectSocket(isReconnecting: boolean): SocketAlike {
-        let socket = new PollSocket(this.url, this.lastMessageId);
-
-        if (isReconnecting) {
-            this._reconnectCount++;
-            console.log(`Reconnecting longPolling socket. Reconnect count: ${this._reconnectCount}.`);
+    connectSocket(uri: UrlBuilder, reconnect: boolean, transport: Transport): SocketAlike {
+        let socket = new PollSocket(uri, transport.lastMessageId, this.configuration.http);
+        let reconnectCount = transport[reconnectCounter];
+        if (typeof reconnectCount !== 'number') {
+            transport[reconnectCounter] = reconnectCount = 0;
         }
 
-        socket.connect(this._reconnectCount)
+        if (reconnect) {
+            transport[reconnectCounter] = ++reconnectCount;
+            console.log(`Reconnecting longPolling socket. Reconnect count: ${reconnectCount}.`);
+        }
+
+        socket.connect(reconnectCount)
             .then(() => {
-                this._reconnectCount = 0;
+                transport[reconnectCounter] = 0;
             });
 
         return socket;
     }
 
-    send(data: any): Promise<void> {
-        if (this._state !== TransportState.Ready) {
-            throw new Error('Transport is not ready for sending.');
-        }
-
-        return (<PollSocket>this._socket).send(data);
+    createSendTransformer(): Transformer {
+        return <Transformer>(x) => x;
     }
-
 }

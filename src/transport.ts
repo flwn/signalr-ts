@@ -1,10 +1,11 @@
 ﻿///<reference path="./_wire.d.ts" />
 import {Connection}  from './connection';
 import {getLogger} from './logging';
+import {UrlBuilder} from './url';
+
 
 
 export class MessageSink {
-    private _onInit: () => void;
 
     private messageBuffer = [];
 
@@ -95,29 +96,60 @@ export interface SocketAlike {
     onopen: (ev: Event) => any;
     readyState: number;
     close(code?: number, reason?: string): void;
-    send(data: any): void;
+    send(data: any): void | Promise<any>;
 }
 
-export abstract class Transport {
+export type Transformer = (data: any) => any;
+
+export interface TransportConfiguration {
+    name: string;
+    supportsKeepAlive: boolean;
+
+    connectSocket(url: UrlBuilder, reconnect: boolean, transport: Transport): SocketAlike;
+
+    createSendTransformer(): Transformer;
+}
+
+
+export interface InitEvent {
+    correlationId?: number;
+}
+
+export class Transport {
     private _onInit: () => void;
     protected _socket: SocketAlike = null;
     private _onClose: (cleanClose: boolean) => void;
 
+    public oninit: (ev: InitEvent) => void;
 
-    constructor(private _sink: MessageSink) {
+    private _beforeSend: (data: any) => any;
+    private _sink: MessageSink;
+
+    constructor(private transportConfiguration: TransportConfiguration, private connection: Connection) {
+        this._beforeSend = transportConfiguration.createSendTransformer();
+        this.protocol = transportConfiguration.name;
+        this._sink = connection.messageSink;
     }
 
 
-    name: string;
+    protocol: string;
 
     connectionLost: (transport: this) => void;
 
-    abstract send(data: any): Promise<any>;
+    public send(data: any): Promise<any> {
+        var payload = this._beforeSend(data);
 
-    protected abstract connectSocket(reconnect: boolean): SocketAlike;
+        let result = this._socket.send(payload);
+
+        return Promise.resolve(result);
+    }
+
+    private connectSocket(reconnect: boolean): SocketAlike {
+        return this.transportConfiguration.connectSocket(this.connection.url, reconnect, this);
+    }
 
     get supportsKeepAlive(): boolean {
-        return false;
+        return this.transportConfiguration.supportsKeepAlive;
     }
 
     setInitialized(correlationId: number): void {
@@ -125,51 +157,24 @@ export abstract class Transport {
             throw new Error('transport not opened');
         }
         this._state = TransportState.Ready;
-        if (!this._onInit) {
-            console.log('No _onInit handler...');
+        if (!this.oninit) {
+            console.log('No oninit handler...');
         } else {
-            this._onInit();
+            this.oninit({ correlationId });
         }
     }
 
     protected _state: TransportState = TransportState.Initializing;
 
-    lastMessageId: string = null;
-
-    waitForInit(timeout: Promise<any>): Promise<any> {
-        if (this._state === TransportState.Ready) {
-            return Promise.resolve(true);
-        }
-
-        if (this._state < TransportState.Ready) {
-
-            return new Promise((resolve, reject) => {
-                let initialized = false;
-
-                timeout.then(() => {
-                    if (initialized) {
-                        return;
-                    }
-                    delete this._onInit;
-                    console.warn('waitForInit: timeout');
-                    reject(new Error(`Timout: Could not initialize transport within ${timeout}ms.`));
-                    this.close();
-                });
-
-                this._onInit = () => {
-                    console.log('waitForInit: transport initialized.')
-                    initialized = true;
-                    resolve();
-                    delete this._onInit;
-                };
-            });
-        }
-
-        return Promise.reject(new Error('Transport closed before init was received.'));
+    get state(): TransportState {
+        return this._state;
     }
 
-    connect(cancelTimeout: Promise<void>, reconnect: boolean = false): Promise<void> {
-        console.log(`Connecting ${this.name} transport.`);
+    lastMessageId: string = null;
+
+
+    connect(cancelTimeout: Promise<number>, reconnect: boolean = false): Promise<void> {
+        console.log(`Connecting ${this.protocol} transport.`);
 
         if (this._socket !== null) {
             return Promise.reject(new Error("A socket is already set to the instance of this transport."));
@@ -180,7 +185,7 @@ export abstract class Transport {
             let opened = false;
 
 
-            cancelTimeout.then((error) => {
+            cancelTimeout.then((timeout) => {
                 if (opened) {
                     return;
                 }
@@ -188,7 +193,7 @@ export abstract class Transport {
                 console.warn('(Re)connect timed out.', reconnect);
                 socket.close();
                 this._socket = null;
-                reject(new Error('Connect Timeout.'));
+                reject(new Error(`Timeout: Could not connect transport within ${timeout}ms.`));
             });
 
             socket.onopen = () => {
@@ -257,6 +262,9 @@ export abstract class Transport {
 
         if (this._socket == null) {
             console.log('No Socket created.');
+            if (this._state !== TransportState.Closed) {
+                this._state = TransportState.Closed;
+            }
             return Promise.resolve(true);
         }
 

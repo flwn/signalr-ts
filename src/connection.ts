@@ -1,7 +1,7 @@
 ﻿///<reference path="./_wire.d.ts" />
 import {Transport, MessageSink} from './transport';
 import {UrlBuilder} from './url';
-import {protocol, EventAggregator, ConnectionConfig} from './config';
+import {protocol, EventAggregator, ConnectionConfig, Configuration} from './config';
 
 import {LogLevel, LogSource, setLogLevel, getLogger, Logger} from './logging';
 
@@ -126,9 +126,10 @@ export class Connection implements LogSource {
         keepAliveTimeout: 0,
         transportConnectTimeout: 0
     };
+    
 
-    constructor(baseUrl: string = '/signalr') {
-        this._urlBuilder = new UrlBuilder(baseUrl);
+    constructor(public config: Configuration) {
+        this._urlBuilder = new UrlBuilder(config.baseUrl);
     }
 
     /** @private */
@@ -272,7 +273,8 @@ export class Connection implements LogSource {
      * @returns a Promise of `this` which resolves when the connection is succesfully started.
      */
     start(options?: ConnectionConfig): Promise<Connection> {
-
+        this.config.validate();
+        
         return protocol.negotiate(this)
             .then((result: NegotiationResult) => {
                 this.setNegotiated(result);

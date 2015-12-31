@@ -25,6 +25,13 @@ namespace SignalrHost
             return base.OnConnected();
         }
         
+        public override Task OnReconnected()
+        {
+            Clients.Others.somebodyReconnected($"ConnectionId: {this.Context.ConnectionId} ");
+            
+            return base.OnReconnected();
+        }
+        
         public override Task OnDisconnected(bool stopCalled) {
             
             Clients.Others.somebodyDisconnected($"stopCalled: {stopCalled.ToString()}, ConnectionId: {this.Context.ConnectionId} ");

@@ -1,6 +1,6 @@
 ///<reference path="./_wire.d.ts" />
 import {Connection, ConnectionState} from './connection';
-import {EventAggregator} from './config';
+import {EventAggregator, Configuration} from './config';
 import {Logger} from './logging';
 
 interface Lookup<TVal> {
@@ -59,8 +59,8 @@ export class HubConnection extends Connection {
         return names.map(hub => this.hub(hub));
     }
 
-    constructor(baseUrl?: string) {
-        super(baseUrl);
+    constructor(config: Configuration) {
+        super(config);
     }
 
     handleData(data: HubInvocationResult|HubConnectionData) {
