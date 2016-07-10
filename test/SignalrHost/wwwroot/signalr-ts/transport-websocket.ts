@@ -10,7 +10,9 @@ function transformSend(data: any): any {
 
 export default class webSockets implements TransportConfiguration {
     public static name: string = "webSockets";
+    
     name = webSockets.name;
+    supportsKeepAlive = true;
 
     connectSocket(uri: UrlBuilder, reconnect: boolean, transport: Transport): SocketAlike {
         return new WebSocket(uri.connect(reconnect));

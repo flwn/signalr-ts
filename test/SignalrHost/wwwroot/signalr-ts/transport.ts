@@ -103,6 +103,7 @@ export type Transformer = (data: any) => any;
 
 export interface TransportConfiguration {
     name: string;
+    supportsKeepAlive: boolean;
 
     connectSocket(url: UrlBuilder, reconnect: boolean, transport: Transport): SocketAlike;
 
@@ -148,7 +149,7 @@ export class Transport {
     }
 
     get supportsKeepAlive(): boolean {
-        return false;
+        return this.transportConfiguration.supportsKeepAlive;
     }
 
     setInitialized(correlationId: number): void {

@@ -202,13 +202,13 @@ function transformSend(data: any): any {
 const reconnectCounter = '__reconnectCount';
 
 export default class longPolling implements TransportConfiguration {
-    name = longPolling.name;
     static name = "longPolling";
+    
+    name = longPolling.name;
+    supportsKeepAlive = false;
 
     constructor(private configuration: Configuration) {
-
     }
-
 
     connectSocket(uri: UrlBuilder, reconnect: boolean, transport: Transport): SocketAlike {
         let socket = new PollSocket(uri, transport.lastMessageId, this.configuration.http);
