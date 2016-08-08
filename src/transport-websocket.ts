@@ -9,9 +9,9 @@ function transformSend(data: any): any {
 }
 
 export default class webSockets implements TransportConfiguration {
-    public static name: string = "webSockets";
+    static transportName: string = "webSockets";
     
-    name = webSockets.name;
+    name = webSockets.transportName;
     supportsKeepAlive = true;
 
     connectSocket(uri: UrlBuilder, reconnect: boolean, transport: Transport): SocketAlike {

@@ -1,11 +1,11 @@
 {
 	"compilerOptions": {
 		"target": "es5",
-		"module": "es2015",
+		"module": "commonjs",
 		"declaration": true,
 		"diagnostics": true,
         "sourceMap": true,
-		"outDir": "dist/es2015",
+		"outDir": "dist/commonjs",
 		"noLib": false,
 		"lib": ["es5", "dom", "es2015.promise"],
 		//"declarationDir": "dist/declarations",
@@ -13,6 +13,6 @@
 			"whatwg-fetch"
 		]
 	},
-	"exclude" : ["node_modules", "typings/**.ts", "dist/**.ts"],
+	"exclude" : ["node_modules", "typings/**.ts"],
 	"include": ["src/*.ts"]
 }

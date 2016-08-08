@@ -26,10 +26,10 @@ var defaultTransportOrder: string[] = [];
 
 export interface TransportConfigurationType {
     new (configuration: Configuration): TransportConfiguration;
-    name: string;
+    transportName: string;
 }
 export function registerTransport(transportFactory: TransportConfigurationType) {
-    let name = transportFactory.name.toLowerCase();
+    let name = transportFactory.transportName.toLowerCase();
     if (defaultTransportOrder.indexOf(name) >= 0) {
         return;
     }

@@ -1,0 +1,17 @@
+{
+	"compilerOptions": {
+		"target": "es5",
+		"module": "umd",
+		"declaration": true,
+		"diagnostics": true,
+		"sourceRoot": "./src/",
+		"rootDir": "./src/",
+        "sourceMap": true,
+		"outFile": "dist/decl/decl.js",
+		"noLib": false
+	},
+
+	"exclude" : ["node_modules", "typings/**.ts", "test"],
+	"include": ["src/*.ts"]
+	
+}

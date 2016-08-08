@@ -42,7 +42,7 @@ function tryConnect(nextTransportInLine: () => Transport, timeout: number): Prom
     let transport: Transport = nextTransportInLine();
 
     if (transport === null) {
-        return Promise.reject<Transport>(new Error('Could not connect to transport.'));
+        return Promise.reject(new Error('Could not connect to transport.'));
     }
     var timeoutPromise = createTimeout(timeout);
     var connectPromise = transport.connect(timeoutPromise)
@@ -157,7 +157,7 @@ export class ProtocolHelper {
         }
 
         if (transports.length < 1) {
-            return Promise.reject<Transport>(new Error(`No transport configured. Supported transports: ${Object.keys(null)} (Server supports WebSockets: ${negotiationResult.TryWebSockets}).`));
+            return Promise.reject(new Error(`No transport configured. Supported transports: ${Object.keys(null)} (Server supports WebSockets: ${negotiationResult.TryWebSockets}).`));
         }
 
         return connectToFirstAvailable(transports, connection, timeout);

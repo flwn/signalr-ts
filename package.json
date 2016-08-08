@@ -15,11 +15,17 @@
   "author": "Erik Aalbers",
   "license": "MIT",
   "devDependencies": {
+    "dts-bundle": "^0.5.0",
     "gulp": "^3.9.0",
     "gulp-concat": "^2.6.0",
     "gulp-sourcemaps": "^1.6.0",
-    "gulp-typescript": "^2.9.2",
+    "gulp-typescript": "^2.13.6",
     "jspm": "^0.16.15",
-    "merge2": "^0.3.6"
+    "merge2": "^0.3.6",
+    "run-sequence": "^1.2.2",
+    "typescript": "^2.1.0-dev.20160808"
+  },
+  "dependencies": {
+    "@types/whatwg-fetch": "0.0.26-alpha"
   }
 }

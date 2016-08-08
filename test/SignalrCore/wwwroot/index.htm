@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>SignalR Test Host</title>
+</head>
+<body>
+	Testing...
+    <pre id="output"></pre>
+  <script src="signalr-ts.js"></script>
+  
+  <script>
+    
+var outstanding = 2;
+signalr.config.setDefaultLogLevel(Number.MAX_VALUE);
+var connection = signalr.hubConnection();
+
+//connection.logLevel = Number.MAX_VALUE;
+
+var helloServerResponse = null;
+var helloClientMessage = null;
+
+connection.hub('myHub')
+    .on('helloClient', (args, methodName) => {
+        helloClientMessage = args;
+        console.log('helloClientMessage received', helloClientMessage);
+        complete();
+    });
+
+
+connection.start()
+    .then((x) => {
+        x.hub('myHub')
+            .invoke('HelloServer', 'John Doe')
+            .then(r => {
+                helloServerResponse = r;
+                console.log('helloServerResponse', helloServerResponse);
+                complete();
+            });
+    });
+
+
+function complete() {
+    --outstanding;
+    document.getElementById("output").innerText = outstanding + " tests of " + 2;
+
+    if (outstanding > 0) {
+        return;
+    }
+
+
+    console.log(`Tests complete.`);
+    document.getElementById("output").innerText = "Tests complete.";
+}
+  </script>
+</body>
+</html>

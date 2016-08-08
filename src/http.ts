@@ -1,11 +1,13 @@
-///<reference path="../typings/whatwg-fetch/whatwg-fetch.d.ts" />
-import 'fetch';
-
 
 /**
  * This class is a simple api for firing XMLHttpRequests. This one implements the get and post methods using the fetch api.
  */
 export class FetchHttpClient {
+    constructor() {
+        if(typeof fetch === 'undefined') {
+            throw new Error('cannot find fetch which is required by the FetchHttpClient');
+        }
+    }
     
     /** Shorthand for a fetch request with method 'POST'. */
     post<TResponse>(url: string, formData?: FormData): Promise<TResponse> {

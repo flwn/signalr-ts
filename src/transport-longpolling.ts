@@ -70,13 +70,13 @@ class PollSocket implements SocketAlike {
         var url = this.url.poll(this._lastMessageId);
         if (this.readyState !== SocketState.Opened) {
             console.log('socket closed.', this.readyState);
-            return Promise.reject<PersistentConnectionData>(new Error('socket closed.'));
+            return Promise.reject(new Error('socket closed.'));
         }
 
         let promise = this.http.get<RawMessageData>(url);
 
         promise.catch((e: Error) => {
-            console.error("--->> poll error!", arguments)
+            //console.error("--->> poll error!", arguments)
             this.onerror(e);
             this._close(false);
         });
@@ -202,9 +202,10 @@ function transformSend(data: any): any {
 const reconnectCounter = '__reconnectCount';
 
 export default class longPolling implements TransportConfiguration {
-    static name = "longPolling";
+    static transportName = "longPolling";
     
-    name = longPolling.name;
+    //name = longPolling.name;
+    name = longPolling.transportName;
     supportsKeepAlive = false;
 
     constructor(private configuration: Configuration) {
