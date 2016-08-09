@@ -8,7 +8,6 @@ import {ConnectionConfig, getTransportConfiguration} from './config';
 function buildTransport(transport: string, connection: Connection): Transport {
     let transportFactory = getTransportConfiguration(transport, connection.config);
     let url = connection.url;
-    let messageSink = connection.messageSink;
     url.transport = transportFactory.name;
 
     let instance: Transport = new Transport(transportFactory, connection);
@@ -144,7 +143,6 @@ export class ProtocolHelper {
         let url = connection.url;
 
         let transportInitialized = false;
-        let messageSink = connection.messageSink;
         let timeout = negotiationResult.TransportConnectTimeout * 1000;
 
         let transports: string[] = connection.config.transportOrder.slice();

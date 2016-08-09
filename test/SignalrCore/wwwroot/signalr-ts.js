@@ -4,6 +4,68 @@
     (factory((global.signalr = global.signalr || {})));
 }(this, function (exports) { 'use strict';
 
+    var UrlBuilder = (function () {
+        function UrlBuilder(baseUrl, connectionData) {
+            if (connectionData === void 0) { connectionData = null; }
+            this.baseUrl = baseUrl;
+            this.connectionData = connectionData;
+            this.appRelativeUrl = '';
+        }
+        UrlBuilder.prototype.negotiate = function () {
+            return this.build('/negotiate');
+        };
+        UrlBuilder.prototype.start = function () {
+            return this.build('/start');
+        };
+        UrlBuilder.prototype.abort = function () {
+            return this.build('/abort');
+        };
+        UrlBuilder.prototype.send = function () {
+            return this.build('/send');
+        };
+        UrlBuilder.prototype.poll = function (messageId) {
+            var url = this.build('/poll') + "&messageId=" + encodeURIComponent(messageId);
+            return url;
+        };
+        UrlBuilder.prototype.connect = function (reconnect) {
+            if (reconnect === void 0) { reconnect = false; }
+            var urlPath = this.build(reconnect === true ? '/reconnect' : '/connect');
+            urlPath += '&tid=' + Math.floor(Math.random() * 11);
+            var protocol = location.protocol;
+            if (this.transport === "webSockets") {
+                //http: -> ws:
+                //https: -> wss:
+                protocol = protocol.replace('http', 'ws');
+            }
+            var connectUrl = protocol + '//' + location.host + urlPath;
+            return connectUrl;
+        };
+        UrlBuilder.prototype.build = function (path) {
+            //todo: use this.appRelativeUrl
+            var url = this.baseUrl + path + '?clientProtocol=1.5';
+            url += '&connectionData=' + this.connectionData;
+            if (this.connectionToken) {
+                url += '&connectionToken=' + encodeURIComponent(this.connectionToken);
+            }
+            if (this.transport) {
+                url += '&transport=' + this.transport;
+            }
+            return url;
+        };
+        UrlBuilder.prototype.setHubs = function () {
+            var hubs = [];
+            for (var _i = 0; _i < arguments.length; _i++) {
+                hubs[_i - 0] = arguments[_i];
+            }
+            var arrayValues = hubs
+                .map(function (hub) { return ("{\"name\":\"" + hub + "\"}"); })
+                .join(',');
+            var queryString = encodeURIComponent('[' + arrayValues + ']');
+            this.connectionData = queryString;
+        };
+        return UrlBuilder;
+    }());
+
     var MessageSink = (function () {
         function MessageSink(connection) {
             this.connection = connection;
@@ -85,7 +147,7 @@
             this.lastMessageId = null;
             this._beforeSend = transportConfiguration.createSendTransformer();
             this.protocol = transportConfiguration.name;
-            this._sink = connection.messageSink;
+            this._sink = new MessageSink(connection);
         }
         Transport.prototype.send = function (data) {
             var payload = this._beforeSend(data);
@@ -222,72 +284,9 @@
         return Transport;
     }());
 
-    var UrlBuilder = (function () {
-        function UrlBuilder(baseUrl, connectionData) {
-            if (connectionData === void 0) { connectionData = null; }
-            this.baseUrl = baseUrl;
-            this.connectionData = connectionData;
-            this.appRelativeUrl = '';
-        }
-        UrlBuilder.prototype.negotiate = function () {
-            return this.build('/negotiate');
-        };
-        UrlBuilder.prototype.start = function () {
-            return this.build('/start');
-        };
-        UrlBuilder.prototype.abort = function () {
-            return this.build('/abort');
-        };
-        UrlBuilder.prototype.send = function () {
-            return this.build('/send');
-        };
-        UrlBuilder.prototype.poll = function (messageId) {
-            var url = this.build('/poll') + "&messageId=" + encodeURIComponent(messageId);
-            return url;
-        };
-        UrlBuilder.prototype.connect = function (reconnect) {
-            if (reconnect === void 0) { reconnect = false; }
-            var urlPath = this.build(reconnect === true ? '/reconnect' : '/connect');
-            urlPath += '&tid=' + Math.floor(Math.random() * 11);
-            var protocol = location.protocol;
-            if (this.transport === "webSockets") {
-                //http: -> ws:
-                //https: -> wss:
-                protocol = protocol.replace('http', 'ws');
-            }
-            var connectUrl = protocol + '//' + location.host + urlPath;
-            return connectUrl;
-        };
-        UrlBuilder.prototype.build = function (path) {
-            //todo: use this.appRelativeUrl
-            var url = this.baseUrl + path + '?clientProtocol=1.5';
-            url += '&connectionData=' + this.connectionData;
-            if (this.connectionToken) {
-                url += '&connectionToken=' + encodeURIComponent(this.connectionToken);
-            }
-            if (this.transport) {
-                url += '&transport=' + this.transport;
-            }
-            return url;
-        };
-        UrlBuilder.prototype.setHubs = function () {
-            var hubs = [];
-            for (var _i = 0; _i < arguments.length; _i++) {
-                hubs[_i - 0] = arguments[_i];
-            }
-            var arrayValues = hubs
-                .map(function (hub) { return ("{\"name\":\"" + hub + "\"}"); })
-                .join(',');
-            var queryString = encodeURIComponent('[' + arrayValues + ']');
-            this.connectionData = queryString;
-        };
-        return UrlBuilder;
-    }());
-
     function buildTransport(transport, connection) {
         var transportFactory = getTransportConfiguration(transport, connection.config);
         var url = connection.url;
-        var messageSink = connection.messageSink;
         url.transport = transportFactory.name;
         var instance = new Transport(transportFactory, connection);
         return instance;
@@ -393,7 +392,6 @@
             if (options === void 0) { options = {}; }
             var url = connection.url;
             var transportInitialized = false;
-            var messageSink = connection.messageSink;
             var timeout = negotiationResult.TransportConnectTimeout * 1000;
             var transports = connection.config.transportOrder.slice();
             if (false === negotiationResult.TryWebSockets) {
@@ -582,6 +580,7 @@
         return ConsoleLogger;
     }());
 
+    /** @internal */
     var protocol = new ProtocolHelper();
     var defaultHttpClient = new FetchHttpClient();
     var transportLookup = {};
@@ -737,7 +736,6 @@
             this.logSourceId = "Connection";
             this.monitor = new ConnectionMonitor(this);
             this.eventAggregator = new EventAggregator();
-            this._messageSink = new MessageSink(this);
             this.groupsToken = null;
             this.timeouts = {
                 disconnectTimeout: 0,
@@ -746,7 +744,7 @@
             };
             this._urlBuilder = new UrlBuilder(config.baseUrl);
         }
-        /** @private */
+        /** @internal */
         Connection.prototype.markLastMessage = function () {
             this.lastMessageReceived = new Date();
             this.monitor.markLastMessage();
@@ -755,6 +753,7 @@
             get: function () {
                 return this._state;
             },
+            /** @internal */
             set: function (newState) {
                 var oldState = this._state;
                 this._state = newState;
@@ -808,18 +807,11 @@
             enumerable: true,
             configurable: true
         });
-        /** @private */
+        /** @internal */
         Connection.prototype.connectionLost = function () {
             this.eventAggregator.publish('connectionLost', this);
             this.handleTransportConnectionLoss(this._transport);
         };
-        Object.defineProperty(Connection.prototype, "messageSink", {
-            get: function () {
-                return this._messageSink;
-            },
-            enumerable: true,
-            configurable: true
-        });
         Connection.prototype.setNegotiated = function (result) {
             this._connectionToken = result.ConnectionToken;
             this._connectionId = result.ConnectionId;
@@ -866,7 +858,7 @@
             return this._transport.send(data);
         };
         /** This method is used internally by the signalr client for handling incoming data.
-         * @private
+         * @internal
         */
         Connection.prototype.handleData = function (data) {
             var _this = this;
@@ -987,6 +979,9 @@
             }
             return names.map(function (hub) { return _this.hub(hub); });
         };
+        /**
+         * @internal
+         */
         HubConnection.prototype.handleData = function (data) {
             var _this = this;
             this.logger.log('handle hub data', data);
@@ -1075,6 +1070,9 @@
                 });
             });
         };
+        /**
+         * @internal
+         */
         HubConnection.prototype.handleInvocationResult = function (result) {
             var invocationId = result.I;
             var pendingInvocation = this._pendingInvocations[invocationId];
@@ -1136,7 +1134,7 @@
             return this._eventAggregator.subscribe(method.toLowerCase(), callback);
         };
         /** This method is used by the hubConnection to invoke a client side event.
-         * @private
+         * @internal
          */
         HubProxy.prototype.trigger = function (method, args, state) {
             this.logger.log("Hub '" + this.name + "': trigger method '" + method + "' (" + args.length + " arguments).", args);

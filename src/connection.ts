@@ -1,5 +1,5 @@
 ﻿///<reference path="./_wire.d.ts" />
-import {Transport, MessageSink} from './transport';
+import {Transport} from './transport';
 import {UrlBuilder} from './url';
 import {protocol, EventAggregator, ConnectionConfig, Configuration} from './config';
 
@@ -112,7 +112,6 @@ export class Connection implements LogSource {
     private monitor: ConnectionMonitor = new ConnectionMonitor(this);
 
     private eventAggregator: EventAggregator = new EventAggregator();
-    private _messageSink: MessageSink = new MessageSink(this);
 
     private _connectionToken: string;
     private _connectionId: string;
@@ -132,7 +131,7 @@ export class Connection implements LogSource {
         this._urlBuilder = new UrlBuilder(config.baseUrl);
     }
 
-    /** @private */
+    /** @internal */
     public markLastMessage(): void {
         this.lastMessageReceived = new Date();
         this.monitor.markLastMessage();
@@ -142,6 +141,7 @@ export class Connection implements LogSource {
     public get state(): ConnectionState {
         return this._state;
     }
+    /** @internal */
     public set state(newState: ConnectionState) {
         let oldState = this._state;
         this._state = newState;
@@ -179,15 +179,10 @@ export class Connection implements LogSource {
         this._slowConnection = isSlowConnection;
     }
 
-    /** @private */
+    /** @internal */
     connectionLost(): void {
         this.eventAggregator.publish('connectionLost', this);
         this.handleTransportConnectionLoss(this._transport);
-    }
-
-
-    public get messageSink(): MessageSink {
-        return this._messageSink;
     }
 
     private setNegotiated(result: NegotiationResult): void {
@@ -243,7 +238,7 @@ export class Connection implements LogSource {
 
 
     /** This method is used internally by the signalr client for handling incoming data. 
-     * @private
+     * @internal
     */
     handleData(data: PersistentConnectionData) {
 
@@ -272,7 +267,7 @@ export class Connection implements LogSource {
      * @param {ConnectionConfig} options - Configuration for this connection.
      * @returns a Promise of `this` which resolves when the connection is succesfully started.
      */
-    start(options?: ConnectionConfig): Promise<Connection> {
+    start(options?: ConnectionConfig): Promise<this> {
         this.config.validate();
         
         return protocol.negotiate(this)
@@ -306,7 +301,7 @@ export class Connection implements LogSource {
      * Starts the connection.
      * @returns a Promise of `this` which resolves when the connection is stopped.
      */
-    stop(): Promise<Connection> {
+    stop(): Promise<this> {
         if (this.state === ConnectionState.disconnected) {
             this.logger.warn("Connection is already stopped.");
             return;

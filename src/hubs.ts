@@ -63,6 +63,9 @@ export class HubConnection extends Connection {
         super(config);
     }
 
+    /**
+     * @internal 
+     */
     handleData(data: HubInvocationResult|HubConnectionData) {
         this.logger.log('handle hub data', data);
         
@@ -96,7 +99,7 @@ export class HubConnection extends Connection {
      * Starts the hub connection and registers hubs with at least one client event subscription.
      * @returns a promise which resolves when the connection is started.
      */
-    start() : Promise<HubConnection> {
+    start() : Promise<this> {
         let activeHubs = this.hubNames
             .filter(hubName => this._hubs[hubName].hasEventHandlers);
             
@@ -109,7 +112,7 @@ export class HubConnection extends Connection {
      * Stops the hub connection and rejects all pending invoications.
      * @returns a promise which resolves when the connection is stopped.
      */
-    stop(): Promise<HubConnection> {
+    stop(): Promise<this> {
         let stopPromise = super.stop();
 
         Object.keys(this._pendingInvocations).forEach((key) => {
@@ -155,6 +158,9 @@ export class HubConnection extends Connection {
         });
     }
 
+    /**
+     * @internal 
+     */
     handleInvocationResult(result: HubInvocationErrorResult|HubInvocationResult) {
         let invocationId = result.I;
         let pendingInvocation = this._pendingInvocations[invocationId];
@@ -216,7 +222,7 @@ export class HubProxy {
     }
     
     /** This method is used by the hubConnection to invoke a client side event.
-     * @private
+     * @internal 
      */
     trigger(method: string, args: any[], state?: any): void {
         this.logger.log(`Hub '${this.name}': trigger method '${method}' (${args.length} arguments).`, args);

@@ -12,7 +12,7 @@ declare module 'signalr' {
 }
 
 declare module 'signalr/connection' {
-    import { Transport, MessageSink } from 'signalr/transport';
+    import { Transport } from 'signalr/transport';
     import { UrlBuilder } from 'signalr/url';
     import { ConnectionConfig, Configuration } from 'signalr/config';
     import { LogLevel, LogSource, Logger } from 'signalr/logging';
@@ -52,17 +52,13 @@ declare module 'signalr/connection' {
             groupsToken: string;
             timeouts: Timeouts;
             constructor(config: Configuration);
-            /** @private */
-            markLastMessage(): void;
+            /** @internal */
             state: ConnectionState;
             logLevel: LogLevel;
             readonly transport: Transport;
             readonly connectionToken: string;
             readonly url: UrlBuilder;
             slowConnection: boolean;
-            /** @private */
-            connectionLost(): void;
-            readonly messageSink: MessageSink;
             /**
                  * Subscribe to incoming messages.
                  * @returns a dispose function. Calling this function will dispose the subscription.
@@ -77,21 +73,17 @@ declare module 'signalr/connection' {
                 * @returns a promise which resolves when the data is send.
                 */
             send(data: any): Promise<void>;
-            /** This method is used internally by the signalr client for handling incoming data.
-                * @private
-             */
-            handleData(data: PersistentConnectionData): void;
             /**
                 * Starts the connection.
                 * @param {ConnectionConfig} options - Configuration for this connection.
                 * @returns a Promise of `this` which resolves when the connection is succesfully started.
                 */
-            start(options?: ConnectionConfig): Promise<Connection>;
+            start(options?: ConnectionConfig): Promise<this>;
             /**
                 * Starts the connection.
                 * @returns a Promise of `this` which resolves when the connection is stopped.
                 */
-            stop(): Promise<Connection>;
+            stop(): Promise<this>;
     }
 }
 
@@ -114,19 +106,17 @@ declare module 'signalr/hubs' {
                 */
             registerHubs(...names: string[]): HubProxy[];
             constructor(config: Configuration);
-            handleData(data: HubInvocationResult | HubConnectionData): void;
             /**
                 * Starts the hub connection and registers hubs with at least one client event subscription.
                 * @returns a promise which resolves when the connection is started.
                 */
-            start(): Promise<HubConnection>;
+            start(): Promise<this>;
             /**
                 * Stops the hub connection and rejects all pending invoications.
                 * @returns a promise which resolves when the connection is stopped.
                 */
-            stop(): Promise<HubConnection>;
+            stop(): Promise<this>;
             invokeHubMethod(hubOrhubName: string | HubProxy, method: string, ...args: any[]): Promise<any>;
-            handleInvocationResult(result: HubInvocationErrorResult | HubInvocationResult): void;
     }
     export class HubProxy {
             name: string;
@@ -143,10 +133,6 @@ declare module 'signalr/hubs' {
                 * @returns an object with a dispose method to unregister the event handler.
                 */
             on(method: string, callback: (...args: any[]) => void): disposer;
-            /** This method is used by the hubConnection to invoke a client side event.
-                * @private
-                */
-            trigger(method: string, args: any[], state?: any): void;
             readonly hasEventHandlers: boolean;
             /** State information, shared by the client and the server. */
             state: any;
@@ -155,10 +141,8 @@ declare module 'signalr/hubs' {
 }
 
 declare module 'signalr/config' {
-    import { ProtocolHelper } from 'signalr/protocol';
     import { FetchHttpClient } from 'signalr/http';
     import { TransportConfiguration } from 'signalr/transport';
-    export var protocol: ProtocolHelper;
     export { EventAggregator } from 'signalr/EventAggregator';
     export { setDefaultLogLevel } from 'signalr/logging';
     export var defaultHttpClient: FetchHttpClient;
@@ -191,14 +175,6 @@ declare module 'signalr/config' {
 declare module 'signalr/transport' {
     import { Connection } from 'signalr/connection';
     import { UrlBuilder } from 'signalr/url';
-    export class MessageSink {
-        constructor(connection: Connection);
-        handleMessage(transport: Transport, message: RawMessageData): void;
-        transportActive: boolean;
-        transportError(e: Error): void;
-        drain(): void;
-        clear(): void;
-    }
     export enum TransportState {
         Initializing = 0,
         Opened = 1,
@@ -283,19 +259,6 @@ declare module 'signalr/logging' {
     export function getLogger(source: LogSource): Logger;
     export function setLogLevel(source: LogSource, level: LogLevel): void;
     export function setDefaultLogLevel(level: LogLevel): void;
-}
-
-declare module 'signalr/protocol' {
-    import { Connection } from 'signalr/connection';
-    import { Transport } from 'signalr/transport';
-    import { ConnectionConfig } from 'signalr/config';
-    export class ProtocolHelper {
-        negotiate(connection: Connection): Promise<NegotiationResult>;
-        reconnect(connection: Connection): Promise<void>;
-        connect(connection: Connection, negotiationResult: NegotiationResult, options?: ConnectionConfig): Promise<Transport>;
-        start(connection: Connection): Promise<any>;
-        abort(connection: Connection): Promise<any>;
-    }
 }
 
 declare module 'signalr/http' {

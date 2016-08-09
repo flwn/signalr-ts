@@ -7,6 +7,7 @@
         "sourceMap": true,
 		"outDir": "dist/es2015",
 		"noLib": false,
+		"stripInternal": true,
 		"lib": ["es5", "dom", "es2015.promise"],
 		//"declarationDir": "dist/declarations",
 		"types": [

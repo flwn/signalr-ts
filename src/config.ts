@@ -3,7 +3,7 @@ import {FetchHttpClient} from './http';
 import {TransportConfiguration} from './transport';
 
 
-
+/** @internal */
 export var protocol = new ProtocolHelper();
 
 export {EventAggregator} from './EventAggregator';

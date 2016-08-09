@@ -5,7 +5,7 @@ import {UrlBuilder} from './url';
 
 
 
-export class MessageSink {
+class MessageSink {
 
     private messageBuffer = [];
 
@@ -128,7 +128,7 @@ export class Transport {
     constructor(private transportConfiguration: TransportConfiguration, private connection: Connection) {
         this._beforeSend = transportConfiguration.createSendTransformer();
         this.protocol = transportConfiguration.name;
-        this._sink = connection.messageSink;
+        this._sink = new MessageSink(connection);
     }
 
 
