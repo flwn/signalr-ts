@@ -3,6 +3,7 @@
 import {Connection} from './connection';
 import {Transport, TransportState, InitEvent} from './transport';
 import {ConnectionConfig, getTransportConfiguration} from './config';
+import {getLogger, Logger} from './logging';
 
 
 function buildTransport(transport: string, connection: Connection): Transport {
@@ -16,10 +17,10 @@ function buildTransport(transport: string, connection: Connection): Transport {
     return instance;
 }
 
-function tryWithinTime<T>(promise: Promise<T>, timeout: number): Promise<T> {
+function tryWithinTime<T>(promise: Promise<T>, timeout: number, log: Logger): Promise<T> {
     return new Promise((resolve: (r: T) => void, reject: (e: Error) => void) => {
         var timer = setTimeout(() => {
-            console.warn('tryConnect: timeout');
+            log.warn('tryConnect: timeout');
             reject(new Error(`Timeout: Could not initialize transport within ${timeout}ms.`));
         }, timeout);
 
@@ -37,7 +38,7 @@ function createTimeout(timeout: number): Promise<number> {
 }
 
 
-function tryConnect(nextTransportInLine: () => Transport, timeout: number): Promise<Transport> {
+function tryConnect(nextTransportInLine: () => Transport, timeout: number, log: Logger): Promise<Transport> {
     let transport: Transport = nextTransportInLine();
 
     if (transport === null) {
@@ -45,28 +46,28 @@ function tryConnect(nextTransportInLine: () => Transport, timeout: number): Prom
     }
     var timeoutPromise = createTimeout(timeout);
     var connectPromise = transport.connect(timeoutPromise)
-        .then(() => waitForInitializedTransport(transport, timeoutPromise))
+        .then(() => waitForInitializedTransport(transport, timeoutPromise, log))
         .then(() => transport);
 
-    return tryWithinTime<Transport>(connectPromise, timeout)
+    return tryWithinTime<Transport>(connectPromise, timeout, log)
         .catch(e => {
-            console.warn(`Failed to connect using ${transport.protocol} transport.`, e);
-            return tryConnect(nextTransportInLine, timeout);
+            log.warn(`Failed to connect using ${transport.protocol} transport.`, e);
+            return tryConnect(nextTransportInLine, timeout, log);
         });
 }
 
 function connectToFirstAvailable(transportOrder: string[], connection: Connection, timeout: number): Promise<Transport> {
-
+    const logger = getLogger(connection);
     return tryConnect(() => {
         if (transportOrder.length === 0) {
             return null;
         }
         return buildTransport(transportOrder.shift(), connection);
-    }, timeout);
+    }, timeout, logger);
 }
 
 
-function waitForInitializedTransport(transport: Transport, timeoutPromise: Promise<number>): Promise<any> {
+function waitForInitializedTransport(transport: Transport, timeoutPromise: Promise<number>, log: Logger): Promise<any> {
     if (transport.state === TransportState.Ready) {
         return Promise.resolve(true);
     }
@@ -82,7 +83,7 @@ function waitForInitializedTransport(transport: Transport, timeoutPromise: Promi
                 if (initialized) {
                     return;
                 }
-                console.warn('waitForInit: timeout');
+                log.warn('waitForInit: timeout');
                 handleInitEvent(new Error(`Timout: Could not initialize transport within ${timeout}ms.`));
             });
 
@@ -132,7 +133,7 @@ export class ProtocolHelper {
 
     public reconnect(connection: Connection) {
         let disconnectTimeout = connection.timeouts.disconnectTimeout * 1000;
-        console.log(`reconnecting (Timeout is ${String(disconnectTimeout)}ms).`);
+        getLogger(connection).log(`reconnecting (Timeout is ${String(disconnectTimeout)}ms).`);
         let reconnectTimeout = createTimeout(disconnectTimeout);
 
         return connection.transport.close()
@@ -170,7 +171,7 @@ export class ProtocolHelper {
                 if (typeof (response) !== "object" || response === null || response.Response !== "started") {
                     throw new Error('Start not succeeded');
                 }
-                console.log('start success');
+                getLogger(connection).log('start success');
             });
     }
 

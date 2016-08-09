@@ -3,6 +3,7 @@ import {Transport, SocketAlike, TransportConfiguration, Transformer} from './tra
 import {UrlBuilder} from './url';
 import {Configuration} from './config';
 import {FetchHttpClient} from './http';
+import {Logger} from './logging';
 
 interface MessageEvent {
     data: RawMessageData;
@@ -35,7 +36,7 @@ function createEvent(name: string) {
 
 class PollSocket implements SocketAlike {
 
-    constructor(private url: UrlBuilder, lastMessageId: string, private http: FetchHttpClient) {
+    constructor(private url: UrlBuilder, lastMessageId: string, private http: FetchHttpClient, private log: Logger) {
         this._lastMessageId = lastMessageId;
     }
 
@@ -65,24 +66,23 @@ class PollSocket implements SocketAlike {
     }
 
     private poll(): Promise<PersistentConnectionData> {
-        console.log('polling...');
+        this.log.log('polling...');
 
         var url = this.url.poll(this._lastMessageId);
         if (this.readyState !== SocketState.Opened) {
-            console.log('socket closed.', this.readyState);
+            this.log.log('socket closed.', this.readyState);
             return Promise.reject(new Error('socket closed.'));
         }
 
         let promise = this.http.get<RawMessageData>(url);
 
         promise.catch((e: Error) => {
-            //console.error("--->> poll error!", arguments)
             this.onerror(e);
             this._close(false);
         });
 
         promise.then((r) => {
-            console.log('poll result', r);
+            this.log.log('poll result', r);
             this.handlePollResponse(r);
         });
 
@@ -92,7 +92,7 @@ class PollSocket implements SocketAlike {
     public connect(reconnectCount: number) {
         let isReconnecting = reconnectCount > 0;
         let connectUrl = this.url.connect(isReconnecting);
-        console.log('Polling. Connecting to ' + connectUrl);
+        this.log.log('Polling. Connecting to ' + connectUrl);
 
         var formdata = new FormData();
         formdata.append('transport', this.url.transport);
@@ -112,13 +112,13 @@ class PollSocket implements SocketAlike {
 
             if (!isReconnecting) {
                 if (this.readyState !== SocketState.Opening) {
-                    console.log('Connect failed. ReadyState is not Opening but is: ' + this.readyState);
+                    this.log.log('Connect failed. ReadyState is not Opening but is: ' + this.readyState);
                     return;
                 }
 
                 if (typeof (responseBody.S) !== "number") {
                     //it is possible to receive messages before init request is received.
-                    console.warn('Expected S property on first server response.');
+                    this.log.warn('Expected S property on first server response.');
                 }
             }
 
@@ -141,7 +141,7 @@ class PollSocket implements SocketAlike {
         }
 
         promise.catch(e => {
-            console.warn('error while connecting longPolling', e);
+            this.log.warn('error while connecting longPolling', e);
             this._close(false);
         });
 
@@ -211,8 +211,8 @@ export default class longPolling implements TransportConfiguration {
     constructor(private configuration: Configuration) {
     }
 
-    connectSocket(uri: UrlBuilder, reconnect: boolean, transport: Transport): SocketAlike {
-        let socket = new PollSocket(uri, transport.lastMessageId, this.configuration.http);
+    connectSocket(uri: UrlBuilder, reconnect: boolean, transport: Transport, log: Logger): SocketAlike {
+        let socket = new PollSocket(uri, transport.lastMessageId, this.configuration.http, log);
         let reconnectCount = transport[reconnectCounter];
         if (typeof reconnectCount !== 'number') {
             transport[reconnectCounter] = reconnectCount = 0;
@@ -220,7 +220,7 @@ export default class longPolling implements TransportConfiguration {
 
         if (reconnect) {
             transport[reconnectCounter] = ++reconnectCount;
-            console.log(`Reconnecting longPolling socket. Reconnect count: ${reconnectCount}.`);
+            log.log(`Reconnecting longPolling socket. Reconnect count: ${reconnectCount}.`);
         }
 
         socket.connect(reconnectCount)

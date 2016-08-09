@@ -1,6 +1,6 @@
 ﻿///<reference path="./_wire.d.ts" />
 import {Connection}  from './connection';
-import {getLogger} from './logging';
+import {getLogger, Logger} from './logging';
 import {UrlBuilder} from './url';
 
 
@@ -8,13 +8,15 @@ import {UrlBuilder} from './url';
 class MessageSink {
 
     private messageBuffer = [];
+    private logger: Logger;
 
     constructor(private connection: Connection) {
+        this.logger = getLogger(connection);
     }
 
     handleMessage(transport: Transport, message: RawMessageData) {
         if (typeof message !== "object" || message === null) {
-            console.warn('Unsupported message format received');
+            this.logger.warn('Unsupported message format received');
             return;
         }
 
@@ -33,7 +35,7 @@ class MessageSink {
             this.messageBuffer.push(message);
 
             if (typeof (message.S) !== "undefined") {
-                console.log('MessageSink: init received', message.S);
+                this.logger.log('MessageSink: init received', message.S);
                 this.transportActive = true;
                 transport.setInitialized(message.S);
                 this.drain();
@@ -105,7 +107,7 @@ export interface TransportConfiguration {
     name: string;
     supportsKeepAlive: boolean;
 
-    connectSocket(url: UrlBuilder, reconnect: boolean, transport: Transport): SocketAlike;
+    connectSocket(url: UrlBuilder, reconnect: boolean, transport: Transport, log: Logger): SocketAlike;
 
     createSendTransformer(): Transformer;
 }
@@ -124,11 +126,14 @@ export class Transport {
 
     private _beforeSend: (data: any) => any;
     private _sink: MessageSink;
+    private logger: Logger;
 
     constructor(private transportConfiguration: TransportConfiguration, private connection: Connection) {
         this._beforeSend = transportConfiguration.createSendTransformer();
         this.protocol = transportConfiguration.name;
         this._sink = new MessageSink(connection);
+
+        this.logger = getLogger(connection);
     }
 
 
@@ -145,7 +150,7 @@ export class Transport {
     }
 
     private connectSocket(reconnect: boolean): SocketAlike {
-        return this.transportConfiguration.connectSocket(this.connection.url, reconnect, this);
+        return this.transportConfiguration.connectSocket(this.connection.url, reconnect, this, this.logger);
     }
 
     get supportsKeepAlive(): boolean {
@@ -158,7 +163,7 @@ export class Transport {
         }
         this._state = TransportState.Ready;
         if (!this.oninit) {
-            console.log('No oninit handler...');
+            this.logger.log('No oninit handler...');
         } else {
             this.oninit({ correlationId });
         }
@@ -174,7 +179,7 @@ export class Transport {
 
 
     connect(cancelTimeout: Promise<number>, reconnect: boolean = false): Promise<void> {
-        console.log(`Connecting ${this.protocol} transport.`);
+        this.logger.log(`Connecting ${this.protocol} transport.`);
 
         if (this._socket !== null) {
             return Promise.reject(new Error("A socket is already set to the instance of this transport."));
@@ -190,7 +195,7 @@ export class Transport {
                     return;
                 }
 
-                console.warn('(Re)connect timed out.', reconnect);
+                this.logger.warn('(Re)connect timed out.', reconnect);
                 socket.close();
                 this._socket = null;
                 reject(new Error(`Timeout: Could not connect transport within ${timeout}ms.`));
@@ -214,7 +219,7 @@ export class Transport {
             socket.onclose = (ev: CloseEvent) => {
                 this._state = TransportState.Closed;
 
-                console.debug('Socket onclose');
+                this.logger.log('Socket onclose');
 
                 if (!opened) {
                     reject(new Error(`Connection closed before really opened (wasClean: ${ev.wasClean}; code: ${ev.code}; reason: ${ev.reason}).`));
@@ -224,7 +229,7 @@ export class Transport {
 
                 if (!cleanClose) {
                     let errorMessage = "Unclean disconnect from socket: " + (ev.reason || "[no reason given].");
-                    console.warn(errorMessage, ev);
+                    this.logger.warn(errorMessage, ev);
                     this._sink.transportError(new Error(errorMessage));
                 }
 
@@ -244,7 +249,7 @@ export class Transport {
                 if (typeof messageData === 'string') {
                     messageData = JSON.parse(ev.data);
                 }
-                console.log('onmessage', messageData);
+                this.logger.log('onmessage', messageData);
 
                 this._sink.handleMessage(this, messageData);
             };
@@ -254,14 +259,14 @@ export class Transport {
     }
 
     close(): Promise<boolean> {
-        console.log('close called on transport');
+        this.logger.log('close called on transport');
 
         if (this._onClose !== null && this._onClose !== undefined) {
-            console.warn('close called twice.');
+            this.logger.warn('close called twice.');
         }
 
         if (this._socket == null) {
-            console.log('No Socket created.');
+            this.logger.log('No Socket created.');
             if (this._state !== TransportState.Closed) {
                 this._state = TransportState.Closed;
             }
@@ -269,12 +274,12 @@ export class Transport {
         }
 
         if (this._socket.readyState === SocketState.CLOSED) {
-            console.log('Socket already closed.');
+            this.logger.log('Socket already closed.');
             this._socket = null;
 
             if (typeof this._onClose === "function") {
                 //should never happen.
-                console.warn('Possible unresolved _onClose promise.')
+                this.logger.warn('Possible unresolved _onClose promise.')
             }
 
             return Promise.resolve(false);
