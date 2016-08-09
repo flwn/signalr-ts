@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>SignalR Test AMD</title>
+</head>
+
+<body>
+    Testing...
+    <pre id="output"></pre>
+    <script src="../fetch.js"></script>
+    <script src="../tests.js"></script>
+    <script src="require.js"></script>
+
+    <script>
+        requirejs(["../signalr-ts"], function(signalr) {
+            executeTests(signalr);
+        });
+  </script>
+</body>
+
+</html>

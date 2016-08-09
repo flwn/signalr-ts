@@ -66,15 +66,93 @@
         return UrlBuilder;
     }());
 
+    var LogLevel;
+    (function (LogLevel) {
+        LogLevel[LogLevel["Off"] = 0] = "Off";
+        LogLevel[LogLevel["Errors"] = 1] = "Errors";
+        LogLevel[LogLevel["Warnings"] = 2] = "Warnings";
+        LogLevel[LogLevel["Info"] = 3] = "Info";
+        LogLevel[LogLevel["Debug"] = 4] = "Debug";
+        LogLevel[LogLevel["All"] = Number.MAX_VALUE] = "All";
+    })(LogLevel || (LogLevel = {}));
+    var defaultLogLevel = LogLevel.Off;
+    var LoggerKey = '__loglevel';
+    function getLogger(source) {
+        if (typeof source !== "object" || source === null) {
+            throw new Error('Invalid log source');
+        }
+        if (!source[LoggerKey]) {
+            source[LoggerKey] = new ConsoleLogger();
+        }
+        return source[LoggerKey];
+    }
+    function setLogLevel(source, level) {
+        if (typeof level !== "number") {
+            throw new Error('level must be a number');
+        }
+        var logger = getLogger(source);
+        logger.level = level;
+    }
+    function setDefaultLogLevel(level) {
+        if (typeof (level) !== "number") {
+            throw new Error('LogLevel must be a number');
+        }
+        defaultLogLevel = level;
+    }
+    function noop() { }
+    function logToConsole(level, message) {
+        var optionalParams = [];
+        for (var _i = 2; _i < arguments.length; _i++) {
+            optionalParams[_i - 2] = arguments[_i];
+        }
+        var formattedMessage = "[" + new Date().toTimeString() + "] SignalR-ts: " + message;
+        console[level].apply(console, [formattedMessage].concat(optionalParams));
+    }
+    var ConsoleLogger = (function () {
+        function ConsoleLogger() {
+            this._level = defaultLogLevel;
+            this.initLoggers();
+        }
+        Object.defineProperty(ConsoleLogger.prototype, "level", {
+            get: function () {
+                return this._level;
+            },
+            set: function (value) {
+                this._level = value;
+                this.initLoggers();
+            },
+            enumerable: true,
+            configurable: true
+        });
+        ConsoleLogger.prototype.initLoggers = function () {
+            var level = this._level;
+            this.error = this.warn = this.info = this.log = noop;
+            if (level >= LogLevel.Errors) {
+                this.error = logToConsole.bind(this, 'error');
+                if (level >= LogLevel.Warnings) {
+                    this.warn = logToConsole.bind(this, 'warn');
+                    if (level >= LogLevel.Info) {
+                        this.info = logToConsole.bind(this, 'info');
+                        if (level >= LogLevel.Debug) {
+                            this.log = logToConsole.bind(this, 'log');
+                        }
+                    }
+                }
+            }
+        };
+        return ConsoleLogger;
+    }());
+
     var MessageSink = (function () {
         function MessageSink(connection) {
             this.connection = connection;
             this.messageBuffer = [];
             this.transportActive = false;
+            this.logger = getLogger(connection);
         }
         MessageSink.prototype.handleMessage = function (transport, message) {
             if (typeof message !== "object" || message === null) {
-                console.warn('Unsupported message format received');
+                this.logger.warn('Unsupported message format received');
                 return;
             }
             this.connection.markLastMessage();
@@ -88,7 +166,7 @@
             if (!this.transportActive) {
                 this.messageBuffer.push(message);
                 if (typeof (message.S) !== "undefined") {
-                    console.log('MessageSink: init received', message.S);
+                    this.logger.log('MessageSink: init received', message.S);
                     this.transportActive = true;
                     transport.setInitialized(message.S);
                     this.drain();
@@ -148,6 +226,7 @@
             this._beforeSend = transportConfiguration.createSendTransformer();
             this.protocol = transportConfiguration.name;
             this._sink = new MessageSink(connection);
+            this.logger = getLogger(connection);
         }
         Transport.prototype.send = function (data) {
             var payload = this._beforeSend(data);
@@ -155,7 +234,7 @@
             return Promise.resolve(result);
         };
         Transport.prototype.connectSocket = function (reconnect) {
-            return this.transportConfiguration.connectSocket(this.connection.url, reconnect, this);
+            return this.transportConfiguration.connectSocket(this.connection.url, reconnect, this, this.logger);
         };
         Object.defineProperty(Transport.prototype, "supportsKeepAlive", {
             get: function () {
@@ -170,7 +249,7 @@
             }
             this._state = TransportState.Ready;
             if (!this.oninit) {
-                console.log('No oninit handler...');
+                this.logger.log('No oninit handler...');
             }
             else {
                 this.oninit({ correlationId: correlationId });
@@ -186,7 +265,7 @@
         Transport.prototype.connect = function (cancelTimeout, reconnect) {
             var _this = this;
             if (reconnect === void 0) { reconnect = false; }
-            console.log("Connecting " + this.protocol + " transport.");
+            this.logger.log("Connecting " + this.protocol + " transport.");
             if (this._socket !== null) {
                 return Promise.reject(new Error("A socket is already set to the instance of this transport."));
             }
@@ -197,7 +276,7 @@
                     if (opened) {
                         return;
                     }
-                    console.warn('(Re)connect timed out.', reconnect);
+                    _this.logger.warn('(Re)connect timed out.', reconnect);
                     socket.close();
                     _this._socket = null;
                     reject(new Error("Timeout: Could not connect transport within " + timeout + "ms."));
@@ -218,14 +297,14 @@
                 };
                 socket.onclose = function (ev) {
                     _this._state = TransportState.Closed;
-                    console.debug('Socket onclose');
+                    _this.logger.log('Socket onclose');
                     if (!opened) {
                         reject(new Error("Connection closed before really opened (wasClean: " + ev.wasClean + "; code: " + ev.code + "; reason: " + ev.reason + ")."));
                     }
                     var cleanClose = opened === false || typeof (ev.wasClean) === "undefined" || ev.wasClean === true;
                     if (!cleanClose) {
                         var errorMessage = "Unclean disconnect from socket: " + (ev.reason || "[no reason given].");
-                        console.warn(errorMessage, ev);
+                        _this.logger.warn(errorMessage, ev);
                         _this._sink.transportError(new Error(errorMessage));
                     }
                     if (typeof _this._onClose === "function") {
@@ -244,7 +323,7 @@
                     if (typeof messageData === 'string') {
                         messageData = JSON.parse(ev.data);
                     }
-                    console.log('onmessage', messageData);
+                    _this.logger.log('onmessage', messageData);
                     _this._sink.handleMessage(_this, messageData);
                 };
                 _this._socket = socket;
@@ -252,23 +331,23 @@
         };
         Transport.prototype.close = function () {
             var _this = this;
-            console.log('close called on transport');
+            this.logger.log('close called on transport');
             if (this._onClose !== null && this._onClose !== undefined) {
-                console.warn('close called twice.');
+                this.logger.warn('close called twice.');
             }
             if (this._socket == null) {
-                console.log('No Socket created.');
+                this.logger.log('No Socket created.');
                 if (this._state !== TransportState.Closed) {
                     this._state = TransportState.Closed;
                 }
                 return Promise.resolve(true);
             }
             if (this._socket.readyState === SocketState.CLOSED) {
-                console.log('Socket already closed.');
+                this.logger.log('Socket already closed.');
                 this._socket = null;
                 if (typeof this._onClose === "function") {
                     //should never happen.
-                    console.warn('Possible unresolved _onClose promise.');
+                    this.logger.warn('Possible unresolved _onClose promise.');
                 }
                 return Promise.resolve(false);
             }
@@ -291,10 +370,10 @@
         var instance = new Transport(transportFactory, connection);
         return instance;
     }
-    function tryWithinTime(promise, timeout) {
+    function tryWithinTime(promise, timeout, log) {
         return new Promise(function (resolve, reject) {
             var timer = setTimeout(function () {
-                console.warn('tryConnect: timeout');
+                log.warn('tryConnect: timeout');
                 reject(new Error("Timeout: Could not initialize transport within " + timeout + "ms."));
             }, timeout);
             promise.then(function (r) {
@@ -308,30 +387,31 @@
             var timer = setTimeout(function () { resolve(timeout); }, timeout);
         });
     }
-    function tryConnect(nextTransportInLine, timeout) {
+    function tryConnect(nextTransportInLine, timeout, log) {
         var transport = nextTransportInLine();
         if (transport === null) {
             return Promise.reject(new Error('Could not connect to transport.'));
         }
         var timeoutPromise = createTimeout(timeout);
         var connectPromise = transport.connect(timeoutPromise)
-            .then(function () { return waitForInitializedTransport(transport, timeoutPromise); })
+            .then(function () { return waitForInitializedTransport(transport, timeoutPromise, log); })
             .then(function () { return transport; });
-        return tryWithinTime(connectPromise, timeout)
+        return tryWithinTime(connectPromise, timeout, log)
             .catch(function (e) {
-            console.warn("Failed to connect using " + transport.protocol + " transport.", e);
-            return tryConnect(nextTransportInLine, timeout);
+            log.warn("Failed to connect using " + transport.protocol + " transport.", e);
+            return tryConnect(nextTransportInLine, timeout, log);
         });
     }
     function connectToFirstAvailable(transportOrder, connection, timeout) {
+        var logger = getLogger(connection);
         return tryConnect(function () {
             if (transportOrder.length === 0) {
                 return null;
             }
             return buildTransport(transportOrder.shift(), connection);
-        }, timeout);
+        }, timeout, logger);
     }
-    function waitForInitializedTransport(transport, timeoutPromise) {
+    function waitForInitializedTransport(transport, timeoutPromise, log) {
         if (transport.state === TransportState.Ready) {
             return Promise.resolve(true);
         }
@@ -343,7 +423,7 @@
                     if (initialized) {
                         return;
                     }
-                    console.warn('waitForInit: timeout');
+                    log.warn('waitForInit: timeout');
                     handleInitEvent(new Error("Timout: Could not initialize transport within " + timeout + "ms."));
                 });
                 function handleInitEvent(ev) {
@@ -383,7 +463,7 @@
         };
         ProtocolHelper.prototype.reconnect = function (connection) {
             var disconnectTimeout = connection.timeouts.disconnectTimeout * 1000;
-            console.log("reconnecting (Timeout is " + String(disconnectTimeout) + "ms).");
+            getLogger(connection).log("reconnecting (Timeout is " + String(disconnectTimeout) + "ms).");
             var reconnectTimeout = createTimeout(disconnectTimeout);
             return connection.transport.close()
                 .then(function () { return connection.transport.connect(reconnectTimeout, true); });
@@ -413,7 +493,7 @@
                 if (typeof (response) !== "object" || response === null || response.Response !== "started") {
                     throw new Error('Start not succeeded');
                 }
-                console.log('start success');
+                getLogger(connection).log('start success');
             });
         };
         ProtocolHelper.prototype.abort = function (connection) {
@@ -501,83 +581,6 @@
             };
         };
         return EventAggregator;
-    }());
-
-    var LogLevel;
-    (function (LogLevel) {
-        LogLevel[LogLevel["Off"] = 0] = "Off";
-        LogLevel[LogLevel["Errors"] = 1] = "Errors";
-        LogLevel[LogLevel["Warnings"] = 2] = "Warnings";
-        LogLevel[LogLevel["Info"] = 3] = "Info";
-        LogLevel[LogLevel["Debug"] = 4] = "Debug";
-        LogLevel[LogLevel["All"] = Number.MAX_VALUE] = "All";
-    })(LogLevel || (LogLevel = {}));
-    var defaultLogLevel = LogLevel.Off;
-    var LoggerKey = '__loglevel';
-    function getLogger(source) {
-        if (typeof source !== "object" || source === null) {
-            throw new Error('Invalid log source');
-        }
-        if (!source[LoggerKey]) {
-            source[LoggerKey] = new ConsoleLogger();
-        }
-        return source[LoggerKey];
-    }
-    function setLogLevel(source, level) {
-        if (typeof level !== "number") {
-            throw new Error('level must be a number');
-        }
-        var logger = getLogger(source);
-        logger.level = level;
-    }
-    function setDefaultLogLevel(level) {
-        if (typeof (level) !== "number") {
-            throw new Error('LogLevel must be a number');
-        }
-        defaultLogLevel = level;
-    }
-    function noop() { }
-    function logToConsole(level, message) {
-        var optionalParams = [];
-        for (var _i = 2; _i < arguments.length; _i++) {
-            optionalParams[_i - 2] = arguments[_i];
-        }
-        var formattedMessage = "[" + new Date().toTimeString() + "] SignalR-ts: " + message;
-        console[level].apply(console, [formattedMessage].concat(optionalParams));
-    }
-    var ConsoleLogger = (function () {
-        function ConsoleLogger() {
-            this._level = defaultLogLevel;
-            this.initLoggers();
-        }
-        Object.defineProperty(ConsoleLogger.prototype, "level", {
-            get: function () {
-                return this._level;
-            },
-            set: function (value) {
-                this._level = value;
-                this.initLoggers();
-            },
-            enumerable: true,
-            configurable: true
-        });
-        ConsoleLogger.prototype.initLoggers = function () {
-            var level = this._level;
-            this.error = this.warn = this.info = this.log = noop;
-            if (level >= LogLevel.Errors) {
-                this.error = logToConsole.bind(this, 'error');
-                if (level >= LogLevel.Warnings) {
-                    this.warn = logToConsole.bind(this, 'warn');
-                    if (level >= LogLevel.Info) {
-                        this.info = logToConsole.bind(this, 'info');
-                        if (level >= LogLevel.Debug) {
-                            this.log = logToConsole.bind(this, 'log');
-                        }
-                    }
-                }
-            }
-        };
-        return ConsoleLogger;
     }());
 
     /** @internal */
@@ -1172,7 +1175,7 @@
             this.name = webSockets.transportName;
             this.supportsKeepAlive = true;
         }
-        webSockets.prototype.connectSocket = function (uri, reconnect, transport) {
+        webSockets.prototype.connectSocket = function (uri, reconnect, transport, log) {
             return new WebSocket(uri.connect(reconnect));
         };
         webSockets.prototype.createSendTransformer = function () {
@@ -1201,9 +1204,10 @@
         }
     }
     var PollSocket = (function () {
-        function PollSocket(url, lastMessageId, http) {
+        function PollSocket(url, lastMessageId, http, log) {
             this.url = url;
             this.http = http;
+            this.log = log;
             this.readyState = SocketState$1.Opening;
             this.onopen = null;
             this.onclose = null;
@@ -1225,20 +1229,19 @@
         };
         PollSocket.prototype.poll = function () {
             var _this = this;
-            console.log('polling...');
+            this.log.log('polling...');
             var url = this.url.poll(this._lastMessageId);
             if (this.readyState !== SocketState$1.Opened) {
-                console.log('socket closed.', this.readyState);
+                this.log.log('socket closed.', this.readyState);
                 return Promise.reject(new Error('socket closed.'));
             }
             var promise = this.http.get(url);
             promise.catch(function (e) {
-                //console.error("--->> poll error!", arguments)
                 _this.onerror(e);
                 _this._close(false);
             });
             promise.then(function (r) {
-                console.log('poll result', r);
+                _this.log.log('poll result', r);
                 _this.handlePollResponse(r);
             });
             return promise;
@@ -1247,7 +1250,7 @@
             var _this = this;
             var isReconnecting = reconnectCount > 0;
             var connectUrl = this.url.connect(isReconnecting);
-            console.log('Polling. Connecting to ' + connectUrl);
+            this.log.log('Polling. Connecting to ' + connectUrl);
             var formdata = new FormData();
             formdata.append('transport', this.url.transport);
             formdata.append('clientProtocol', '1.5');
@@ -1262,12 +1265,12 @@
             promise.then(function (responseBody) {
                 if (!isReconnecting) {
                     if (_this.readyState !== SocketState$1.Opening) {
-                        console.log('Connect failed. ReadyState is not Opening but is: ' + _this.readyState);
+                        _this.log.log('Connect failed. ReadyState is not Opening but is: ' + _this.readyState);
                         return;
                     }
                     if (typeof (responseBody.S) !== "number") {
                         //it is possible to receive messages before init request is received.
-                        console.warn('Expected S property on first server response.');
+                        _this.log.warn('Expected S property on first server response.');
                     }
                 }
                 if (!isReconnecting || _this.readyState !== SocketState$1.Opened) {
@@ -1284,7 +1287,7 @@
                 this._reconnectTimeout = setTimeout(function () { return _this.fireOpened(); }, reconnectHeuristic);
             }
             promise.catch(function (e) {
-                console.warn('error while connecting longPolling', e);
+                _this.log.warn('error while connecting longPolling', e);
                 _this._close(false);
             });
             return promise;
@@ -1335,15 +1338,15 @@
             this.name = longPolling.transportName;
             this.supportsKeepAlive = false;
         }
-        longPolling.prototype.connectSocket = function (uri, reconnect, transport) {
-            var socket = new PollSocket(uri, transport.lastMessageId, this.configuration.http);
+        longPolling.prototype.connectSocket = function (uri, reconnect, transport, log) {
+            var socket = new PollSocket(uri, transport.lastMessageId, this.configuration.http, log);
             var reconnectCount = transport[reconnectCounter];
             if (typeof reconnectCount !== 'number') {
                 transport[reconnectCounter] = reconnectCount = 0;
             }
             if (reconnect) {
                 transport[reconnectCounter] = ++reconnectCount;
-                console.log("Reconnecting longPolling socket. Reconnect count: " + reconnectCount + ".");
+                log.log("Reconnecting longPolling socket. Reconnect count: " + reconnectCount + ".");
             }
             socket.connect(reconnectCount)
                 .then(function () {
