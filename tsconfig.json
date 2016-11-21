@@ -4,16 +4,26 @@
 		"module": "es2015",
 		"declaration": true,
 		"diagnostics": true,
-        "sourceMap": true,
+		"sourceMap": true,
 		"outDir": "dist/es2015",
 		"noLib": false,
 		"stripInternal": true,
-		"lib": ["es5", "dom", "es2015.promise"],
-		//"declarationDir": "dist/declarations",
+		"lib": [
+			"es5",
+			"dom",
+			"es2015.promise"
+		],
 		"types": [
 			"whatwg-fetch"
 		]
 	},
-	"exclude" : ["node_modules", "typings/**.ts", "dist/**.ts"],
-	"include": ["src/*.ts"]
+	"exclude": [
+		"node_modules",
+		"typings/**.ts",
+		"dist",
+		"gulpfile.js"
+	],
+	"include": [
+		"src/*.ts"
+	]
 }

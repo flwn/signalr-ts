@@ -8,36 +8,74 @@ var rollup = require('rollup');
 var runSequence = require('run-sequence');
 
 
-var tsProject = ts.createProject('tsconfig.json', {
-	sortOutput: true,
-	typescript: require('typescript')
-});
+
+function createTsProject(opt) {
+	var cfg = {
+		sortOutput: true,
+		typescript: require('typescript'),
+		"module": opt.module
+	};
+	if(opt.outFile) {
+		cfg.outFile = opt.outFile;	
+	}
+	return ts.createProject('tsconfig.json', cfg);
+}
+
+
+
 
 gulp.task('scripts', function () {
-    var tsResult = gulp.src('src/*.ts')
+	var tsProject = createTsProject("none");
+	var tsResult = gulp.src('src/*.ts')
 		.pipe(sourcemaps.init()) // This means sourcemaps will be generated 
 		.pipe(ts(tsProject));
 
-    return merge([
+	return merge([
 		tsResult
 			.dts.pipe(gulp.dest('dist/typings')),
 
-        tsResult.js
-			.pipe(concat('signalr-ts.js')) // You can use other plugins that also support gulp-sourcemaps 
+		tsResult.js
+			//.pipe(concat('signalr-ts.js')) // You can use other plugins that also support gulp-sourcemaps 
 			.pipe(sourcemaps.write()) // Now the sourcemaps are added to the .js file 
 			.pipe(gulp.dest('dist'))
-    ]);
+	]);
+});
+gulp.task('compile-umd', function () {
+	var tsProject = createTsProject({ module: "es2015" });
+
+	var tsResult = gulp.src('src/*.ts')
+		.pipe(ts(tsProject));
+
+	return merge([
+		tsResult.dts.pipe(gulp.dest('dist/es2015')),
+		tsResult.js.pipe(gulp.dest('dist/es2015'))
+	]);
+});
+gulp.task('compile-commonjs', function () {
+	var tsProject = createTsProject({ module: "commonjs" });
+
+	var tsResult = gulp.src('src/*.ts')
+		.pipe(ts(tsProject));
+
+	return merge([
+		tsResult.dts.pipe(gulp.dest('dist/commonjs')),
+		tsResult.js.pipe(gulp.dest('dist/commonjs'))
+	]);
 });
 
-gulp.task('compile', function () {
-    var tsResult = gulp.src('src/*.ts')
-        .pipe(ts(tsProject));
+gulp.task('compile-system', function () {
+	var tsProject = createTsProject({ module: "system",outFile: "dist/system/signalr-ts.js" });
 
-    return merge([
-        tsResult.dts.pipe(gulp.dest('dist/es2015')),
-        tsResult.js.pipe(gulp.dest('dist/es2015'))
-    ]);
-})
+	var tsResult = gulp.src('src/*.ts')
+		.pipe(ts(tsProject));
+
+	return merge([
+		tsResult.dts.pipe(gulp.dest('dist/system')),
+		tsResult.js.pipe(gulp.dest('dist/system'))
+	]);
+});
+
+
 
 gulp.task('dts', function () {
 	dts.bundle({
@@ -59,7 +97,7 @@ gulp.task('rollup', function () {
 		// If you have a bundle you want to re-use (e.g., when using a watcher to rebuild as files change),
 		// you can tell rollup use a previous bundle as its starting point.
 		// This is entirely optional!
-//		cache: cache
+		//		cache: cache
 	}).then(function (bundle) {
 
 
@@ -78,8 +116,8 @@ gulp.task('rollup', function () {
 	});
 });
 
-gulp.task('bundle-umd', function(done) {
-	runSequence('compile', 'dts', 'rollup', done);
+gulp.task('build-umd', function (done) {
+	runSequence('compile-umd', 'dts', 'rollup', done);
 })
 
 gulp.task('prepare-test', function () {

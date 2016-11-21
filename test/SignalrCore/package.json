@@ -1,0 +1,22 @@
+{
+  "name": "signalrcore",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "jspm": "^0.17.0-beta.25"
+  },
+  "jspm": {
+    "name": "signalrcore",
+    "main": "signalrcore.js",
+    "directories": {
+      "baseURL": "wwwroot/systemjs"
+    },
+    "devDependencies": {}
+  }
+}

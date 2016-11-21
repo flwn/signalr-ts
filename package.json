@@ -2,7 +2,8 @@
   "name": "signalr-ts",
   "version": "1.0.0",
   "description": "A signalr client library written in TypeScript.",
-  "main": "dist/index.js",
+  "main": "dist/commonjs/index.js",
+  "types": "dist/commonjs/index.d.ts",
   "directories": {
     "test": "test"
   },

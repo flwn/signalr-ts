@@ -3,18 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <title>SignalR Test Host</title>
+    <script src="jspm_packages/system.js"></script>
+    <script src="jspm.config.js"></script>
 </head>
 
 <body>
     Testing...
-    <pre id="output"></pre>
-    <script src="fetch.js"></script>
-    <script src="signalr-ts.js"></script>
-    <script src="tests.js"></script>
-
+    <div id="container"></div>
     <script>
-        executeTests(signalr);
+    SystemJS.import('main.js');
   </script>
+
 </body>
 
 </html>
